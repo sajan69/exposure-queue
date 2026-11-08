@@ -1,0 +1,4 @@
+asset,cve,observed_on,criticality,exposure
+web-01,CVE-2021-44228,2026-11-01,critical,internet
+workstation-01,CVE-2024-1234,2026-11-02,medium,internal
+web-01,cve-2021-44228,2026-11-01,critical,internet

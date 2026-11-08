@@ -1,0 +1,30 @@
+{
+  "name": "exposure-queue",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <27"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test dist/test/*.test.js",
+    "preview": "npm run build --silent && node dist/src/cli.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "links": "node scripts/check-links.mjs"
+  },
+  "dependencies": {
+    "csv-parse": "7.0.3",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "@types/node": "24.10.0",
+    "eslint": "10.14.0",
+    "typescript-eslint": "8.72.1",
+    "prettier": "3.9.10",
+    "linkinator": "8.1.0"
+  }
+}
