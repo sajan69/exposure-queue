@@ -13,18 +13,21 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "links": "node scripts/check-links.mjs"
+    "links": "node scripts/check-links.mjs",
+    "test:db": "npm run build && node --test dist/integration/*.test.js"
   },
   "dependencies": {
     "csv-parse": "7.0.3",
+    "pg": "8.23.1",
     "zod": "4.6.7"
   },
   "devDependencies": {
-    "typescript": "6.0.3",
     "@types/node": "24.10.0",
+    "@types/pg": "8.23.1",
     "eslint": "10.14.0",
-    "typescript-eslint": "8.72.1",
+    "linkinator": "8.1.0",
     "prettier": "3.9.10",
-    "linkinator": "8.1.0"
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1"
   }
 }
