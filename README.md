@@ -121,3 +121,56 @@ the workspace revision and import records before retrying; there is no automatic
 retry or exactly-once delivery guarantee. `initialize` creates this schema only
 and is not a general migration manager. Feed ingestion and analyst decision
 tables are not provided by this component.
+
+## Offline evidence snapshots
+
+`parseKev(bytes, asOf)` and `parseEpss(bytes, asOf)` in `src/feeds.ts` validate
+explicitly supplied, decompressed UTF-8 bytes. They perform no download or
+database write. Both return the original byte SHA-256/length, publication day,
+source label, version and validated rows. Source labels describe the expected
+format; they do not authenticate where supplied bytes came from. Retain
+acquisition URL, retrieval time and compressed-file hash separately when
+acquiring real feeds.
+
+The KEV parser follows the
+[official schema](https://raw.githubusercontent.com/cisagov/kev-data/develop/known_exploited_vulnerabilities_schema.json)
+reviewed on 9 November 2026. It checks declared count, unique CVE identifiers,
+required text/date fields, optional ransomware/forensic-triage/CWE fields and
+date consistency. Unknown fields are refused so schema changes require review.
+Input is limited to 64 MiB, 10,000 KEV rows and 16,384 characters per text
+field. This is an application subset with additional bounds, not a general JSON
+Schema validator. It uses JavaScript JSON parsing; duplicate JSON property names
+are not separately detected. Duplicate CVE rows are always refused.
+
+The EPSS parser accepts the dated `#model_version:...,score_date:...` metadata
+line and exact `cve,epss,percentile` header described by
+[FIRST's bulk data documentation](https://www.first.org/epss/data). It requires
+canonical uppercase CVE keys, decimal values in `[0,1]`, unique rows, valid
+publication/review dates and no future publication day. Limits are 64 MiB,
+1,000,000 data rows and 256 characters per CSV record. Unsupported historic
+files without metadata, alternate number encodings or changed schemas are
+refused. No compressed input is accepted by these parsers. Byte limits are not
+exact RAM limits or an adversarial-parser sandbox.
+
+`joinEvidence(cves, kevSnapshotOrNull, epssSnapshotOrNull, asOf)` joins exact
+CVE identifiers only. It distinguishes unavailable snapshots, KEV `not-listed`,
+EPSS `missing` and a genuine zero score. Publication age is returned in whole
+UTC days; there is no hidden freshness threshold or automatic risk
+classification. A stale snapshot remains dated evidence and must not be
+represented as current.
+
+CISA's
+[KEV data license](https://raw.githubusercontent.com/cisagov/kev-data/develop/LICENSE)
+states CC0 1.0 for the database; linked third-party material has separate terms.
+EPSS scores are provided by FIRST's EPSS SIG and Empirical Security. FIRST's
+[FAQ](https://www.first.org/epss/faq) permits free CSV/API access and requests
+attribution; this project does not relabel EPSS data as CC0 or grant rights to
+training data. EPSS estimates exploitation probability and is not a complete
+risk score. Neither a KEV match nor an EPSS score proves that a specific asset
+is vulnerable. KEV due dates are source fields, not an automatically applicable
+local obligation.
+
+The six feed tests use synthetic records only and cover validation, exact joins,
+missing/zero distinctions, dates and bounds. They do not demonstrate successful
+acquisition of a complete official snapshot, detection accuracy or operational
+prioritization quality. Feed persistence and refresh are not implemented here.
