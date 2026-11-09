@@ -13,11 +13,18 @@ for (const url of new Set(links)) {
   const result = await new LinkChecker().check({
     path: url,
     recurse: false,
+    concurrency: 8,
+    // Validate referenced targets, not links owned by third-party pages.
+    linksToSkip: async (candidate) => candidate !== url,
     timeout: 20000,
     retry: true,
     retryErrors: true,
     retryErrorsCount: 2,
   });
-  if (!result.passed) throw new Error(`Documentation link failed: ${url}`);
+  const target = result.links.find((link) => link.url === url);
+  if (!target || target.state !== 'OK' || !result.passed)
+    throw new Error(
+      `Documentation link failed: ${url} (status ${target?.status ?? 'unknown'})`,
+    );
   console.log(`OK ${url}`);
 }
