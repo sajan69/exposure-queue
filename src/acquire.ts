@@ -117,6 +117,7 @@ export async function acquireArchives(target: string, asOf: string) {
       decodedBytes: snapshot.bytes,
       decodedSha256: snapshot.sha256,
       publishedOn: snapshot.publishedOn,
+      publishedAt: snapshot.publishedAt,
       version: snapshot.version,
       rows: snapshot.rows.length,
     });

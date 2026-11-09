@@ -30,6 +30,7 @@ export type Snapshot<T> = {
   sha256: string;
   bytes: number;
   publishedOn: string;
+  publishedAt?: string;
   version: string;
   rows: T[];
 };
@@ -103,24 +104,30 @@ export function parseKev(bytes: Uint8Array, asOf: string): Snapshot<KevRow> {
     if (row.dateAdded > day || row.dueDate < row.dateAdded)
       throw new FeedError('Inconsistent KEV dates');
   unique(data.vulnerabilities, (row) => row.cveID);
-  return record(
-    bytes,
-    'cisa-kev',
-    day,
-    data.catalogVersion,
-    data.vulnerabilities,
-  );
+  return {
+    ...record(
+      bytes,
+      'cisa-kev',
+      day,
+      data.catalogVersion,
+      data.vulnerabilities,
+    ),
+    publishedAt: data.dateReleased,
+  };
 }
 export function parseEpss(bytes: Uint8Array, asOf: string): Snapshot<EpssRow> {
   const input = decode(bytes);
   const lineEnd = input.indexOf('\n');
   const metadata =
-    /^#model_version:(v[0-9]{4}\.[0-9]{2}\.[0-9]{2}),score_date:([0-9]{4}-[0-9]{2}-[0-9]{2})\r?$/.exec(
+    /^#model_version:(v[0-9]{4}\.[0-9]{2}\.[0-9]{2}),score_date:([^\r\n]{1,40})\r?$/.exec(
       input.slice(0, lineEnd),
     );
   if (!metadata) throw new FeedError('Missing EPSS model/date metadata');
   const version = metadata[1]!;
-  const day = metadata[2]!;
+  const publication = metadata[2]!;
+  if (!z.union([daySchema, z.iso.datetime()]).safeParse(publication).success)
+    throw new FeedError('Invalid EPSS publication timestamp');
+  const day = publication.slice(0, 10);
   checkDay(day, asOf);
   if (!daySchema.safeParse(version.slice(1).replaceAll('.', '-')).success)
     throw new FeedError('Invalid EPSS model version');
@@ -139,7 +146,19 @@ export function parseEpss(bytes: Uint8Array, asOf: string): Snapshot<EpssRow> {
     records.length > 1000001
   )
     throw new FeedError('Invalid EPSS header or row count');
-  const decimal = /^(?:0(?:\.[0-9]{1,20})?|1(?:\.0{1,20})?)$/;
+  const decimal =
+    /^(?:0|[1-9][0-9]{0,19})(?:\.[0-9]{1,20})?(?:[eE][+-]?[0-9]{1,3})?$/;
+  const validScore = (value: string) => {
+    if (!decimal.test(value)) return false;
+    const number = Number(value);
+    const nonzeroMantissa = /[1-9]/.test(value.split(/[eE]/)[0]!);
+    return (
+      Number.isFinite(number) &&
+      number >= 0 &&
+      number <= 1 &&
+      !(number === 0 && nonzeroMantissa)
+    );
+  };
   const rows = records.slice(1).map((cells) => {
     const [cve, score, percentile] = cells;
     if (
@@ -147,14 +166,17 @@ export function parseEpss(bytes: Uint8Array, asOf: string): Snapshot<EpssRow> {
       !cveSchema.safeParse(cve).success ||
       !score ||
       !percentile ||
-      !decimal.test(score) ||
-      !decimal.test(percentile)
+      !validScore(score) ||
+      !validScore(percentile)
     )
       throw new FeedError('Invalid EPSS row');
     return { cve: cve!, epss: Number(score), percentile: Number(percentile) };
   });
   unique(rows, (row) => row.cve);
-  return record(bytes, 'first-epss', day, version, rows);
+  return {
+    ...record(bytes, 'first-epss', day, version, rows),
+    publishedAt: publication,
+  };
 }
 
 /** Missing snapshots and missing keys stay distinct; a zero score is data. */

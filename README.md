@@ -143,14 +143,17 @@ Schema validator. It uses JavaScript JSON parsing; duplicate JSON property names
 are not separately detected. Duplicate CVE rows are always refused.
 
 The EPSS parser accepts the dated `#model_version:...,score_date:...` metadata
-line and exact `cve,epss,percentile` header described by
+line (a publication date or validated UTC timestamp) and exact
+`cve,epss,percentile` header described by
 [FIRST's bulk data documentation](https://www.first.org/epss/data). It requires
-canonical uppercase CVE keys, decimal values in `[0,1]`, unique rows, valid
-publication/review dates and no future publication day. Limits are 64 MiB,
-1,000,000 data rows and 256 characters per CSV record. Unsupported historic
-files without metadata, alternate number encodings or changed schemas are
-refused. No compressed input is accepted by these parsers. Byte limits are not
-exact RAM limits or an adversarial-parser sandbox.
+canonical uppercase CVE keys, finite decimal/scientific values in `[0,1]`,
+unique rows, valid publication/review dates and no future publication day.
+Limits are 64 MiB, 1,000,000 data rows and 256 characters per CSV record.
+Unsupported historic files without metadata, hexadecimal/nonfinite/underflowing
+numbers or changed schemas are refused. Scores use JavaScript numbers; original
+bytes retain the exact source representation. No compressed input is accepted by
+these parsers. Byte limits are not exact RAM limits or an adversarial-parser
+sandbox.
 
 `joinEvidence(cves, kevSnapshotOrNull, epssSnapshotOrNull, asOf)` joins exact
 CVE identifiers only. It distinguishes unavailable snapshots, KEV `not-listed`,
@@ -212,3 +215,14 @@ only the provenance summary for seven days. A passing archive job demonstrates
 complete validation of these specific bytes, not detection accuracy, local asset
 applicability or operational prioritization quality. No database refresh or
 automatic daily feed synchronization occurs.
+
+The checked [acquisition record](examples/feed-acquisition.json) was measured
+locally on Node.js 24.22.1/Linux x64. It contains 1,769 KEV records published on
+6 November 2026 and all 401,956 EPSS scores published on 8 November 2026. The
+original KEV file is 1,832,349 bytes; EPSS is 2,818,450 gzip bytes and
+12,228,073 decoded bytes. The record retains full hashes, timestamps and source
+identities. These are dated archives, not a claim about today's catalog. The
+EPSS source uses a UTC publication timestamp and scientific notation in some
+percentiles; both are validated explicitly. CI compares source identities,
+decoded hashes, publication metadata and complete row counts with this record;
+retrieval times and environment versions naturally differ across runs.

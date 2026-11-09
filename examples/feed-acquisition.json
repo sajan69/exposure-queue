@@ -1,0 +1,48 @@
+{
+  "protocol": "official-archives-v1",
+  "complete": true,
+  "asOf": "2026-11-09",
+  "environment": {
+    "node": "v24.22.1",
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "attribution": "KEV: CISA, CC0 database. EPSS: FIRST EPSS SIG and Empirical Security; freely published scores, attribution requested.",
+  "records": [
+    {
+      "source": "cisa-kev",
+      "url": "https://raw.githubusercontent.com/cisagov/kev-data/e5b3a9b25050a8da26c96266c5bfe438ee0bdebc/known_exploited_vulnerabilities.json",
+      "gitBlobSha1": "9100b9e667514b65cd38edd4ceeacb4e3b1c40f2",
+      "startedAt": "2026-11-09T07:02:48.065Z",
+      "retrievedAt": "2026-11-09T07:02:52.571Z",
+      "archiveBytes": 1832349,
+      "archiveSha256": "47e0406b2be5a40420eff66f3d90e83eb8883dae6ff4d08e1b2a942c366f6cc2",
+      "decodedBytes": 1832349,
+      "decodedSha256": "47e0406b2be5a40420eff66f3d90e83eb8883dae6ff4d08e1b2a942c366f6cc2",
+      "publishedOn": "2026-11-06",
+      "publishedAt": "2026-11-06T19:44:45.1797Z",
+      "version": "2026.11.06",
+      "rows": 1769
+    },
+    {
+      "source": "first-epss",
+      "url": "https://raw.githubusercontent.com/empiricalsec/epss_scores/a14602d91346f3875c90d027824578b6b7eecc1d/2026/epss_scores-2026-11-08.csv.gz",
+      "gitBlobSha1": "0b3ab0805a80e31746159f2d3e3ea3a08df96c06",
+      "startedAt": "2026-11-09T07:02:52.596Z",
+      "retrievedAt": "2026-11-09T07:02:52.722Z",
+      "archiveBytes": 2818450,
+      "archiveSha256": "8014978e643bdd4401a53d542365299e0445674c190981fedf39fe7829edf46b",
+      "decodedBytes": 12228073,
+      "decodedSha256": "813a2c027f80329066d2c4ef2211a02f27173a49c1b0a0554c5551126193ed6a",
+      "publishedOn": "2026-11-08",
+      "publishedAt": "2026-11-08T12:00:26Z",
+      "version": "v2026.06.15",
+      "rows": 401956
+    }
+  ],
+  "verification": {
+    "kind": "local execution",
+    "command": "node scripts/acquire-feeds.mjs artifacts/official-archives-validated 2026-11-09",
+    "limitations": "Complete parser validation of fixed public archives; not detection accuracy, asset applicability, prioritization quality or a performance benchmark."
+  }
+}

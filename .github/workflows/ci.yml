@@ -58,6 +58,19 @@ jobs:
       - run: mkdir -p artifacts
       - run:
           node scripts/acquire-feeds.mjs artifacts/official-archives 2026-11-09
+      - name: Verify recorded archive identities and complete row counts
+        run: |
+          node --input-type=module - <<'JS'
+          import { readFile } from 'node:fs/promises';
+          import assert from 'node:assert/strict';
+          const actual = JSON.parse(await readFile('artifacts/official-archives/summary.json', 'utf8'));
+          const recorded = JSON.parse(await readFile('examples/feed-acquisition.json', 'utf8'));
+          assert.equal(actual.complete, true);
+          assert.equal(actual.protocol, recorded.protocol);
+          const stable = ({ startedAt, retrievedAt, ...record }) => record;
+          assert.deepEqual(actual.records.map(stable), recorded.records.map(stable));
+          console.log('Verified complete archived source identities and counts');
+          JS
       - uses: actions/upload-artifact@v4
         with:
           name: official-archives-provenance

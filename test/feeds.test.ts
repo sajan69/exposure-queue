@@ -73,7 +73,9 @@ test('EPSS rejects duplicates, nondecimal/nonfinite/out-of-range scores and malf
     'CVE-2024-1234,NaN,0',
     'CVE-2024-1234,1.01,0',
     'CVE-2024-1234,-1,0',
-    'CVE-2024-1234,1e-3,0',
+    'CVE-2024-1234,1e3,0',
+    'CVE-2024-1234,1e-999,0',
+    'CVE-2024-1234,0x1,0',
     'CVE-2024-1234,,0',
     'CVE-2024-1234,0,0,extra',
     'CVE-2024-1234,0,0\nCVE-2024-1234,0,0',
@@ -118,4 +120,46 @@ test('exact join distinguishes absent evidence, missing score, zero score and pr
     'unavailable',
   );
   assert.throws(() => joinEvidence(['cve-2024-1234'], k, e, '2026-11-09'));
+});
+
+test('EPSS official UTC timestamp is validated and preserved without losing publication day', () => {
+  const timestamp = '2026-11-08T12:00:26Z';
+  const bytes = Buffer.from(
+    epssInput()
+      .toString()
+      .replace('score_date:2026-11-08', 'score_date:' + timestamp),
+  );
+  const snapshot = parseEpss(bytes, '2026-11-09');
+  assert.equal(snapshot.publishedAt, timestamp);
+  assert.equal(snapshot.publishedOn, '2026-11-08');
+  for (const bad of [
+    '2026-11-08T25:00:00Z',
+    '2026-02-30T12:00:00Z',
+    '2026-11-08T12:00:00',
+    '2026-11-08T12:00:00+05:00',
+    '2026-11-10T00:00:00Z',
+  ])
+    assert.throws(() =>
+      parseEpss(
+        Buffer.from(bytes.toString().replace(timestamp, bad)),
+        '2026-11-09',
+      ),
+    );
+});
+
+test('EPSS official scientific notation is finite, bounded and preserves zero distinction', () => {
+  const snapshot = parseEpss(
+    epssInput('CVE-2023-20914,0.0006,5e-05'),
+    '2026-11-09',
+  );
+  assert.deepEqual(snapshot.rows[0], {
+    cve: 'CVE-2023-20914',
+    epss: 0.0006,
+    percentile: 0.00005,
+  });
+  assert.equal(
+    parseEpss(epssInput('CVE-2024-1234,1e+0,0e-05'), '2026-11-09').rows[0]
+      ?.epss,
+    1,
+  );
 });
