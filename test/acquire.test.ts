@@ -91,3 +91,22 @@ test('existing destination is refused before any network or file mutation', asyn
     await rm(directory, { recursive: true });
   }
 });
+
+test('acquisition CLI reports safe domain failures and refuses extra arguments', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const invalid = spawnSync(
+    process.execPath,
+    ['scripts/acquire-feeds.mjs', 'unused-directory', '2026-02-30'],
+    { encoding: 'utf8' },
+  );
+  assert.equal(invalid.status, 2);
+  assert.match(invalid.stderr, /Review day must be valid/);
+  assert.doesNotMatch(invalid.stderr, /at acquireArchives/);
+  const extra = spawnSync(
+    process.execPath,
+    ['scripts/acquire-feeds.mjs', 'unused', '2026-11-09', 'extra'],
+    { encoding: 'utf8' },
+  );
+  assert.equal(extra.status, 2);
+  assert.match(extra.stderr, /Usage:/);
+});
