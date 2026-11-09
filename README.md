@@ -72,8 +72,8 @@ Tests cover the checked example, identity collisions, conflicting duplicates,
 invalid dates/enums/identifiers, malformed CSV, BOM/CRLF, UTF-8 and bounds. CI
 runs the tests, TypeScript build, ESLint, Prettier and external documentation
 links on Node.js 24 and 26. These are synthetic mechanical checks, not detection
-accuracy, production capacity or evidence of real asset exposure. Feed evidence,
-persistence and analyst decisions are not implemented in this component.
+accuracy, production capacity or evidence of real asset exposure. Analyst
+decisions are not implemented in this component.
 
 ## PostgreSQL import service
 
@@ -174,3 +174,41 @@ The six feed tests use synthetic records only and cover validation, exact joins,
 missing/zero distinctions, dates and bounds. They do not demonstrate successful
 acquisition of a complete official snapshot, detection accuracy or operational
 prioritization quality. Feed persistence and refresh are not implemented here.
+
+## Reproduce archived source ingestion
+
+```sh
+npm run build
+mkdir -p artifacts
+node scripts/acquire-feeds.mjs artifacts/official-archives 2026-11-09
+```
+
+This explicit command downloads two complete fixed archives: CISA's KEV mirror
+at commit `e5b3a9b25050a8da26c96266c5bfe438ee0bdebc` and the 8 November 2026
+EPSS archive at commit `a14602d91346f3875c90d027824578b6b7eecc1d`. It does not
+fetch the latest feed or accept arbitrary URLs. Reviewed Git blob SHA-1
+identities and exact original byte lengths must match before decompression or
+parsing. SHA-256 hashes of original and decoded bytes, retrieval timestamps,
+publication days, versions and complete validated row counts are recorded in
+`summary.json`. Hashes provide byte identity, not a publisher signature or
+independent proof of accuracy. HTTPS and the selected official repositories
+establish the acquisition route. EPSS is attributed to FIRST's EPSS SIG and
+Empirical Security.
+
+Downloads use fixed HTTPS URLs, refuse redirects and credentials, have a
+30-second request timeout, and enforce an 8 MiB declared/streamed transfer cap.
+Node's gzip implementation checks integrity with a 64 MiB output cap; the
+existing complete snapshot parsers then apply their schema and row bounds.
+Limits are not a precise RAM ceiling. No rows are sampled, truncated, repaired
+or skipped. Network, hash, gzip or schema failure refuses the run. A new
+directory is required, including when a prior attempt failed; existing
+destinations are never cleared or reused. Parent directories must be trusted.
+Successful output retains raw archives and the decoded EPSS CSV with private
+creation permissions; these are not committed. This is not a filesystem
+durability or hostile-parent race guarantee.
+
+CI runs this explicit acquisition separately from synthetic tests and retains
+only the provenance summary for seven days. A passing archive job demonstrates
+complete validation of these specific bytes, not detection accuracy, local asset
+applicability or operational prioritization quality. No database refresh or
+automatic daily feed synchronization occurs.
