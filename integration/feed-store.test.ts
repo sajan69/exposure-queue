@@ -123,3 +123,79 @@ test('feed activation atomically advances revision and refuses stale or conflict
     await pool.end();
   }
 });
+
+test('separate PostgreSQL clients cannot activate two feeds against one revision', async () => {
+  const admin = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
+  const schema = 'feed_concurrent_test';
+  await admin.query(`CREATE SCHEMA ${schema}`);
+  const pool = new Pool({
+    connectionString: process.env.TEST_DATABASE_URL,
+    max: 2,
+    options: `-c search_path=${schema}`,
+  });
+  try {
+    await initialize(pool);
+    await initializeFeeds(pool);
+    const bytes = Buffer.from(
+      '#model_version:v2026.06.15,score_date:2026-11-08T12:00:26Z\ncve,epss,percentile\nCVE-2024-1234,0,0\n',
+    );
+    const hash = parseEpss(bytes, '2026-11-09').sha256;
+    const provenance = {
+      url: 'https://example.invalid/synthetic.csv',
+      retrievedAt: '2026-11-09T00:00:00Z',
+      archiveSha256: hash,
+    };
+    // Both leased backend connections exist before either transaction starts.
+    const clients = await Promise.all([pool.connect(), pool.connect()]);
+    try {
+      const pids = await Promise.all(
+        clients.map((c) => c.query('SELECT pg_backend_pid() AS pid')),
+      );
+      assert.notEqual(pids[0]!.rows[0].pid, pids[1]!.rows[0].pid);
+      const outcomes = await Promise.allSettled(
+        clients.map((client) =>
+          activateFeed(
+            {
+              connect: async () => ({
+                query: client.query.bind(client),
+                release: () => {},
+              }),
+            } as unknown as Pool,
+            'first-epss',
+            bytes,
+            '2026-11-09',
+            hash,
+            0,
+            provenance,
+          ),
+        ),
+      );
+      assert.equal(outcomes.filter((r) => r.status === 'fulfilled').length, 1);
+      const rejected = outcomes.find((r) => r.status === 'rejected');
+      assert.ok(
+        rejected?.status === 'rejected' &&
+          rejected.reason instanceof StaleReview,
+      );
+    } finally {
+      clients.forEach((c) => c.release());
+    }
+    assert.equal(
+      (await pool.query('SELECT revision FROM eq_workspace')).rows[0].revision,
+      1,
+    );
+    assert.equal(
+      (await pool.query('SELECT count(*)::int AS n FROM eq_feed_snapshots'))
+        .rows[0].n,
+      1,
+    );
+    assert.equal(
+      (await pool.query('SELECT count(*)::int AS n FROM eq_feed_rows')).rows[0]
+        .n,
+      1,
+    );
+  } finally {
+    await pool.end();
+    await admin.query(`DROP SCHEMA ${schema} CASCADE`);
+    await admin.end();
+  }
+});
