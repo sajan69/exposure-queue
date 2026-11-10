@@ -53,6 +53,39 @@ test('feed activation atomically advances revision and refuses stale or conflict
       ),
       /same-day/,
     );
+    // Fail the second insert batch after 1,000 rows have reached PostgreSQL.
+    await client.query(`CREATE FUNCTION refuse_fixture() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.cve='CVE-2024-11000' THEN RAISE EXCEPTION 'fixture failure'; END IF; RETURN NEW; END $$;
+      CREATE TRIGGER refuse_fixture BEFORE INSERT ON eq_feed_rows FOR EACH ROW EXECUTE FUNCTION refuse_fixture()`);
+    const larger = Buffer.from(
+      '#model_version:v2026.06.15,score_date:2026-11-09T12:00:00Z\ncve,epss,percentile\n' +
+        Array.from(
+          { length: 1001 },
+          (_, i) => `CVE-2024-${10000 + i},0.1,0.2`,
+        ).join('\n') +
+        '\n',
+    );
+    await assert.rejects(
+      activateFeed(
+        dedicated,
+        'first-epss',
+        larger,
+        '2026-11-09',
+        parseEpss(larger, '2026-11-09').sha256,
+        1,
+      ),
+      /fixture failure/,
+    );
+    assert.equal(
+      (await client.query('SELECT count(*)::int AS n FROM eq_feed_rows'))
+        .rows[0].n,
+      1,
+    );
+    assert.equal(
+      (await client.query('SELECT snapshot_id::text AS id FROM eq_feed_active'))
+        .rows[0].id,
+      result.snapshotId,
+    );
     assert.equal(
       (await client.query('SELECT count(*)::int AS n FROM eq_feed_snapshots'))
         .rows[0].n,
