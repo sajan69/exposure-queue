@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { z } from 'zod';
 import { parseKev, parseEpss, FeedError } from './feeds.js';
 import { StaleReview } from './store.js';
 
@@ -11,6 +12,7 @@ export async function initializeFeeds(pool: Pool): Promise<void> {
       published_on date NOT NULL,
       version text NOT NULL,
       row_count integer NOT NULL CHECK(row_count BETWEEN 1 AND 1000000),
+      provenance jsonb NOT NULL CHECK(jsonb_typeof(provenance)='object'),
       created_at timestamptz NOT NULL DEFAULT now(),
       UNIQUE(source,id)
     );
@@ -36,11 +38,27 @@ export async function activateFeed(
   asOf: string,
   expectedHash: string,
   expectedRevision: number,
+  provenance: { url: string; retrievedAt: string; archiveSha256: string },
 ) {
   if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)
     throw new FeedError('Invalid workspace revision');
   if (source !== 'cisa-kev' && source !== 'first-epss')
     throw new FeedError('Unknown feed source');
+  const acquisition = z
+    .strictObject({
+      url: z
+        .url()
+        .max(2048)
+        .refine((value) => {
+          const u = new URL(value);
+          return u.protocol === 'https:' && !u.username && !u.password;
+        }),
+      retrievedAt: z.iso.datetime(),
+      archiveSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    })
+    .safeParse(provenance);
+  if (!acquisition.success)
+    throw new FeedError('Invalid acquisition provenance');
   const snapshot =
     source === 'cisa-kev' ? parseKev(bytes, asOf) : parseEpss(bytes, asOf);
   if (snapshot.sha256 !== expectedHash)
@@ -67,13 +85,14 @@ export async function activateFeed(
     )
       throw new FeedError('Older or conflicting same-day feed refused');
     const inserted = await client.query<{ id: string }>(
-      `INSERT INTO eq_feed_snapshots(source,hash,published_on,version,row_count) VALUES($1,$2,$3,$4,$5) RETURNING id`,
+      `INSERT INTO eq_feed_snapshots(source,hash,published_on,version,row_count,provenance) VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,
       [
         source,
         snapshot.sha256,
         snapshot.publishedOn,
         snapshot.version,
         snapshot.rows.length,
+        JSON.stringify(acquisition.data),
       ],
     );
     const id = inserted.rows[0]!.id;

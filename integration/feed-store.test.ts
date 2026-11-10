@@ -26,6 +26,11 @@ test('feed activation atomically advances revision and refuses stale or conflict
     const bytes = Buffer.from(
       '#model_version:v2026.06.15,score_date:2026-11-08T12:00:26Z\ncve,epss,percentile\nCVE-2024-1234,0,0\n',
     );
+    const provenance = {
+      url: 'https://example.invalid/synthetic-epss.csv',
+      retrievedAt: '2026-11-09T13:00:00Z',
+      archiveSha256: 'a'.repeat(64),
+    };
     const hash = parseEpss(bytes, '2026-11-09').sha256;
     const result = await activateFeed(
       dedicated,
@@ -34,11 +39,20 @@ test('feed activation atomically advances revision and refuses stale or conflict
       '2026-11-09',
       hash,
       0,
+      provenance,
     );
     assert.equal(result.revision, 1);
     assert.equal(result.rows, 1);
     await assert.rejects(
-      activateFeed(dedicated, 'first-epss', bytes, '2026-11-09', hash, 0),
+      activateFeed(
+        dedicated,
+        'first-epss',
+        bytes,
+        '2026-11-09',
+        hash,
+        0,
+        provenance,
+      ),
       StaleReview,
     );
     const changed = Buffer.from(bytes.toString().replace(',0,0', ',0.5,0'));
@@ -50,8 +64,14 @@ test('feed activation atomically advances revision and refuses stale or conflict
         '2026-11-09',
         parseEpss(changed, '2026-11-09').sha256,
         1,
+        provenance,
       ),
       /same-day/,
+    );
+    assert.deepEqual(
+      (await client.query('SELECT provenance FROM eq_feed_snapshots')).rows[0]
+        .provenance,
+      provenance,
     );
     // Fail the second insert batch after 1,000 rows have reached PostgreSQL.
     await client.query(`CREATE FUNCTION refuse_fixture() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -73,6 +93,7 @@ test('feed activation atomically advances revision and refuses stale or conflict
         '2026-11-09',
         parseEpss(larger, '2026-11-09').sha256,
         1,
+        provenance,
       ),
       /fixture failure/,
     );
