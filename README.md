@@ -226,3 +226,47 @@ EPSS source uses a UTC publication timestamp and scientific notation in some
 percentiles; both are validated explicitly. CI compares source identities,
 decoded hashes, publication metadata and complete row counts with this record;
 retrieval times and environment versions naturally differ across runs.
+
+## Transactional feed snapshots
+
+Call `initialize(pool)` followed by `initializeFeeds(pool)` from
+`src/feed-store.ts` against a dedicated PostgreSQL database. Initialization is
+create-only: it supports the schema shown here, not migration of earlier working
+branch schemas. Do not point integration tests at an existing user database.
+
+`activateFeed(pool, source, decodedBytes, asOf, expectedHash, expectedRevision, provenance)`
+accepts `cisa-kev` or `first-epss`. It reparses the complete decoded bytes using
+the same bounded parsers and requires their SHA-256 to match the reviewed hash.
+Obtain the current revision from `reviewImport` or the workspace row. Provenance
+requires exactly `url` (HTTPS, no embedded credentials), `retrievedAt` (UTC
+timestamp) and `archiveSha256` (64 lowercase hexadecimal characters). All
+validation occurs before acquiring a database connection.
+
+Provenance is a caller-supplied acquisition record. This function does not fetch
+the URL, authenticate its publisher or recompute the compressed archive hash:
+retain the acquisition output and verify its original archive separately. The
+stored decoded hash binds the rows to the supplied decoded bytes. Scores and
+source fields are stored as JSONB under exact, case-sensitive CVE keys.
+
+One transaction locks the same singleton workspace revision used by findings
+imports, inserts snapshot metadata and rows in batches of at most 1,000, updates
+the active pointer, and advances the revision. Stale callers must review again.
+Older publication days and differing bytes on the active publication day are
+refused. Repeating identical bytes creates another snapshot and advances the
+revision; this is not an idempotency or exactly-once API. Historical snapshots
+remain stored; no retention deletion or secure erasure is provided.
+
+Snapshot rows, provenance, active pointer and revision commit together. On a
+connection failure during commit the outcome can be unknown; inspect the
+revision and snapshots before retrying. All application writers must follow the
+revision protocol. Direct SQL changes can bypass it. The composite foreign key
+prevents an active source from referencing another source's snapshot.
+
+PostgreSQL integration tests use synthetic feeds. They force a failure at row
+1,001 after the first batch is inserted and assert that rows, pointer and
+revision roll back; separate backend connections compete against one revision,
+with one activation succeeding and one receiving `StaleReview`. These fixtures
+verify transaction mechanics, not persistence of the complete official archives
+or production capacity. Complete official archive validation is a separate CI
+job. There is no HTTP feed refresh, SQL queue interface or automatic feed
+synchronization in these functions.
