@@ -4,7 +4,8 @@ ExposureQueue validates authorized asset/CVE findings CSV files and produces a
 reviewable JSON preview without changing the input file. It identifies exact
 normalized duplicates and blocks confirmation when records conflict or fail
 validation. The current command is an offline ingestion component: it does not
-persist findings, fetch vulnerability feeds or provide a web service.
+write to PostgreSQL or provide a web service. Separate programming interfaces
+provide findings imports and feed snapshot activation below.
 
 ## Run
 
@@ -176,7 +177,8 @@ local obligation.
 The six feed tests use synthetic records only and cover validation, exact joins,
 missing/zero distinctions, dates and bounds. They do not demonstrate successful
 acquisition of a complete official snapshot, detection accuracy or operational
-prioritization quality. Feed persistence and refresh are not implemented here.
+prioritization quality. These parser functions perform no persistence or
+refresh.
 
 ## Reproduce archived source ingestion
 
@@ -266,7 +268,15 @@ PostgreSQL integration tests use synthetic feeds. They force a failure at row
 1,001 after the first batch is inserted and assert that rows, pointer and
 revision roll back; separate backend connections compete against one revision,
 with one activation succeeding and one receiving `StaleReview`. These fixtures
-verify transaction mechanics, not persistence of the complete official archives
-or production capacity. Complete official archive validation is a separate CI
-job. There is no HTTP feed refresh, SQL queue interface or automatic feed
-synchronization in these functions.
+verify transaction mechanics. The archive CI job separately revalidates the
+pinned archive bytes, activates both complete feeds in a fresh PostgreSQL schema
+and compares every stored CVE and evidence object with the parsed source in
+2,000-row pages. It checks snapshot metadata, provenance, active sources and
+revision as well. This is correctness verification, not production capacity.
+Reproduce after acquisition with
+`TEST_DATABASE_URL=... node scripts/verify-archive-store.mjs artifacts/official-archives`.
+The script requires a disposable database and owns the fixed
+`archive_store_verification` schema; an existing schema is refused and never
+removed. A newly created schema is dropped on completion or failure. There is no
+HTTP feed refresh, SQL queue interface or automatic feed synchronization in
+these functions.
