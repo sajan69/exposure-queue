@@ -13,8 +13,12 @@ const requestSchema = z.strictObject({
       asOf: z.iso.date(),
       criticality: z.string().nullable(),
       minEpss: z.number().nullable(),
+      kevState: z.string().nullable(),
+      maxAgeDays: z.number().nullable(),
     })
     .optional(),
+  kevState: z.enum(['listed', 'not-listed', 'unavailable']).optional(),
+  maxAgeDays: z.number().int().min(0).max(36500).optional(),
   minEpss: z.number().min(0).max(1).optional(),
   criticality: z.enum(['low', 'medium', 'high', 'critical']).optional(),
 });
@@ -26,7 +30,9 @@ export async function readQueue(pool: Pool, request: unknown) {
     options.after &&
     (options.after.asOf !== options.asOf ||
       options.after.criticality !== (options.criticality ?? null) ||
-      options.after.minEpss !== (options.minEpss ?? null))
+      options.after.minEpss !== (options.minEpss ?? null) ||
+      options.after.kevState !== (options.kevState ?? null) ||
+      options.after.maxAgeDays !== (options.maxAgeDays ?? null))
   )
     throw new StaleReview('Queue filters changed; restart');
   const client = await pool.connect();
@@ -65,6 +71,8 @@ export async function readQueue(pool: Pool, request: unknown) {
     WHERE ($2::text IS NULL OR f.criticality=$2)
       AND ($4::text IS NULL OR (f.asset,f.cve)>($4::text COLLATE "C",$5::text COLLATE "C"))
       AND ($6::double precision IS NULL OR (er.evidence->>'epss')::double precision >= $6)
+      AND ($7::text IS NULL OR (CASE WHEN k.id IS NULL THEN 'unavailable' WHEN kr.cve IS NULL THEN 'not-listed' ELSE 'listed' END)=$7)
+      AND ($8::integer IS NULL OR ($1::date-k.published_on<=$8 AND $1::date-e.published_on<=$8))
     ORDER BY f.asset COLLATE "C",f.cve COLLATE "C" LIMIT $3`,
       [
         options.asOf,
@@ -73,6 +81,8 @@ export async function readQueue(pool: Pool, request: unknown) {
         options.after?.asset ?? null,
         options.after?.cve ?? null,
         options.minEpss ?? null,
+        options.kevState ?? null,
+        options.maxAgeDays ?? null,
       ],
     );
     const rows = result.rows.slice(0, options.limit);
@@ -86,6 +96,8 @@ export async function readQueue(pool: Pool, request: unknown) {
             asOf: options.asOf,
             criticality: options.criticality ?? null,
             minEpss: options.minEpss ?? null,
+            kevState: options.kevState ?? null,
+            maxAgeDays: options.maxAgeDays ?? null,
           }
         : null;
     await client.query('COMMIT');

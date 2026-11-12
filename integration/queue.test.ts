@@ -29,6 +29,21 @@ test('queue exact joins preserve zero, missing evidence, pagination and revision
     let page = await readQueue(scoped, { asOf: '2026-11-09', limit: 1 });
     assert.equal(page.rows[0]!.epss_state, 'unavailable');
     assert.equal(page.rows[0]!.kev_state, 'unavailable');
+    assert.equal(
+      (await readQueue(scoped, { asOf: '2026-11-09', kevState: 'listed' })).rows
+        .length,
+      0,
+    );
+    assert.equal(
+      (await readQueue(scoped, { asOf: '2026-11-09', kevState: 'unavailable' }))
+        .rows.length,
+      2,
+    );
+    assert.equal(
+      (await readQueue(scoped, { asOf: '2026-11-09', maxAgeDays: 1 })).rows
+        .length,
+      0,
+    );
     const bytes = Buffer.from(
       '#model_version:v2026.06.15,score_date:2026-11-08\ncve,epss,percentile\nCVE-2024-1234,0,0\n',
     );
