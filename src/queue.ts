@@ -12,18 +12,21 @@ const requestSchema = z.strictObject({
       revision: z.number().int().nonnegative(),
       asOf: z.iso.date(),
       criticality: z.string().nullable(),
+      minEpss: z.number().nullable(),
     })
     .optional(),
+  minEpss: z.number().min(0).max(1).optional(),
   criticality: z.enum(['low', 'medium', 'high', 'critical']).optional(),
 });
 
-/** One SQL statement sees findings and active feeds in the same MVCC snapshot. */
+/** Each page reads revision, findings and evidence from one MVCC snapshot. */
 export async function readQueue(pool: Pool, request: unknown) {
   const options = requestSchema.parse(request);
   if (
     options.after &&
     (options.after.asOf !== options.asOf ||
-      options.after.criticality !== (options.criticality ?? null))
+      options.after.criticality !== (options.criticality ?? null) ||
+      options.after.minEpss !== (options.minEpss ?? null))
   )
     throw new StaleReview('Queue filters changed; restart');
   const client = await pool.connect();
@@ -44,7 +47,9 @@ export async function readQueue(pool: Pool, request: unknown) {
       throw new RangeError('Review date precedes active evidence');
     const result = await client.query(
       `SELECT f.asset,f.cve,f.criticality,f.exposure,f.observed_on::text,
-      w.revision,
+      w.revision,k.hash AS kev_hash,e.hash AS epss_hash,
+      k.provenance AS kev_provenance,e.provenance AS epss_provenance,
+      k.published_on::text AS kev_published_on,e.published_on::text AS epss_published_on,
       CASE WHEN k.id IS NULL THEN 'unavailable' WHEN kr.cve IS NULL THEN 'not-listed' ELSE 'listed' END AS kev_state,
       CASE WHEN e.id IS NULL THEN 'unavailable' WHEN er.cve IS NULL THEN 'missing' ELSE 'scored' END AS epss_state,
       er.evidence->>'epss' AS epss,
@@ -59,6 +64,7 @@ export async function readQueue(pool: Pool, request: unknown) {
     LEFT JOIN eq_feed_rows er ON er.snapshot_id=e.id AND er.cve=f.cve
     WHERE ($2::text IS NULL OR f.criticality=$2)
       AND ($4::text IS NULL OR (f.asset,f.cve)>($4::text COLLATE "C",$5::text COLLATE "C"))
+      AND ($6::double precision IS NULL OR (er.evidence->>'epss')::double precision >= $6)
     ORDER BY f.asset COLLATE "C",f.cve COLLATE "C" LIMIT $3`,
       [
         options.asOf,
@@ -66,6 +72,7 @@ export async function readQueue(pool: Pool, request: unknown) {
         options.limit + 1,
         options.after?.asset ?? null,
         options.after?.cve ?? null,
+        options.minEpss ?? null,
       ],
     );
     const rows = result.rows.slice(0, options.limit);
@@ -78,6 +85,7 @@ export async function readQueue(pool: Pool, request: unknown) {
             revision,
             asOf: options.asOf,
             criticality: options.criticality ?? null,
+            minEpss: options.minEpss ?? null,
           }
         : null;
     await client.query('COMMIT');

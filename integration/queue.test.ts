@@ -51,6 +51,19 @@ test('queue exact joins preserve zero, missing evidence, pagination and revision
     );
     page = await readQueue(scoped, { asOf: '2026-11-09', limit: 1 });
     assert.equal(page.rows[0]!.epss, '0');
+    assert.equal(
+      page.rows[0]!.epss_hash,
+      parseEpss(bytes, '2026-11-09').sha256,
+    );
+    assert.equal(
+      (await readQueue(scoped, { asOf: '2026-11-09', minEpss: 0 })).rows.length,
+      1,
+    );
+    assert.equal(
+      (await readQueue(scoped, { asOf: '2026-11-09', minEpss: 0.1 })).rows
+        .length,
+      0,
+    );
     assert.equal(page.rows[0]!.epss_state, 'scored');
     assert.equal(page.rows[0]!.epss_age_days, 1);
     const second = await readQueue(scoped, {
