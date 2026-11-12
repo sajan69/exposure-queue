@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { initialize, StaleReview } from '../src/store.js';
 import { initializeFeeds, activateFeed } from '../src/feed-store.js';
-import { parseEpss } from '../src/feeds.js';
+import { parseKev, parseEpss } from '../src/feeds.js';
 import { readQueue } from '../src/queue.js';
 if (!process.env.TEST_DATABASE_URL)
   throw new Error('TEST_DATABASE_URL required');
@@ -95,6 +95,72 @@ test('queue exact joins preserve zero, missing evidence, pagination and revision
       1,
     );
     await assert.rejects(readQueue(scoped, { asOf: '2026-11-07' }), RangeError);
+    const kev = Buffer.from(
+      JSON.stringify({
+        catalogVersion: 'fixture-v1',
+        dateReleased: '2026-11-08T00:00:00Z',
+        count: 1,
+        vulnerabilities: [
+          {
+            cveID: 'CVE-2024-1234',
+            vendorProject: 'Synthetic',
+            product: 'Fixture',
+            vulnerabilityName: 'Synthetic only',
+            dateAdded: '2026-11-01',
+            shortDescription: 'Not an advisory',
+            requiredAction: 'Fixture action',
+            dueDate: '2026-11-15',
+          },
+        ],
+      }),
+    );
+    await activateFeed(
+      scoped,
+      'cisa-kev',
+      kev,
+      '2026-11-09',
+      parseKev(kev, '2026-11-09').sha256,
+      1,
+      {
+        url: 'https://example.invalid/kev',
+        retrievedAt: '2026-11-09T00:00:00Z',
+        archiveSha256: 'c'.repeat(64),
+      },
+    );
+    assert.deepEqual(
+      (
+        await readQueue(scoped, { asOf: '2026-11-09', kevState: 'listed' })
+      ).rows.map((r) => r.cve),
+      ['CVE-2024-1234'],
+    );
+    assert.deepEqual(
+      (
+        await readQueue(scoped, { asOf: '2026-11-09', kevState: 'not-listed' })
+      ).rows.map((r) => r.cve),
+      ['CVE-2024-12345'],
+    );
+    assert.equal(
+      (await readQueue(scoped, { asOf: '2026-11-09', maxAgeDays: 1 })).rows
+        .length,
+      2,
+    );
+    assert.equal(
+      (await readQueue(scoped, { asOf: '2026-11-09', maxAgeDays: 0 })).rows
+        .length,
+      0,
+    );
+    const cursor = (await readQueue(scoped, { asOf: '2026-11-09', limit: 1 }))
+      .next;
+    for (const filter of [
+      { kevState: 'listed' },
+      { maxAgeDays: 1 },
+      { minEpss: 0 },
+      { criticality: 'high' },
+    ])
+      await assert.rejects(
+        readQueue(scoped, { asOf: '2026-11-09', after: cursor, ...filter }),
+        StaleReview,
+      );
   } finally {
     await client.query('DROP SCHEMA queue_fixture CASCADE');
     client.release();
