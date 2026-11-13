@@ -280,3 +280,45 @@ The script requires a disposable database and owns the fixed
 removed. A newly created schema is dropped on completion or failure. There is no
 HTTP feed refresh, SQL queue interface or automatic feed synchronization in
 these functions.
+
+## Read a filtered queue
+
+After initializing findings and feed tables, `readQueue(pool, request)` from
+`src/queue.ts` returns `{ revision, rows, next }`. For example:
+
+```js
+const request = { asOf: '2026-11-09', limit: 25, kevState: 'listed' };
+const first = await readQueue(pool, request);
+const second = first.next
+  ? await readQueue(pool, { ...request, after: first.next })
+  : null;
+```
+
+`asOf` is an explicit valid date, not a historical database snapshot: the query
+uses currently active feeds and refuses a date before either feed's publication
+day. Optional filters combine with AND: `criticality`, `kevState` (`listed`,
+`not-listed`, `unavailable`), `minEpss` (inclusive 0–1) and `maxAgeDays`
+(inclusive integer 0–36,500). The age filter requires both active feeds to exist
+and be within the bound. It does not require a matching CVE in either feed. An
+EPSS threshold excludes missing/unavailable scores; zero remains data. Omitting
+filters retains missing evidence and dated snapshots.
+
+Rows include finding context, exact-CVE evidence states, EPSS as a decimal
+string or null, publication days, whole-day ages, decoded source hashes and
+stored acquisition provenance. KEV absence in an available catalog is
+`not-listed`; unavailable catalogs and missing EPSS rows remain distinct.
+Provenance retains the caller-recorded limitations described above.
+
+Pages contain at most 100 rows (default 50), ordered by case-sensitive asset
+then CVE in C collation. Each page uses one read-only repeatable-read
+transaction. Pass `next` unchanged as `after`, preserving date and filters. A
+changed workspace revision or filter raises `StaleReview`; restart from the
+first page. Page size may change. Cursors are ordinary validated objects, not
+signed authorization credentials. Direct SQL changes bypassing revision updates
+invalidate this coordination contract. No transaction stays open between pages.
+
+The PostgreSQL fixture checks exact matches and prefix near misses, missing
+feeds and rows, genuine zero scores, inclusive age boundaries, pagination,
+changed filters and stale revisions. These are synthetic correctness cases, not
+prioritization accuracy or workload-capacity measurements. This interface
+provides no HTTP endpoint, authentication or automatic risk ranking.
