@@ -278,8 +278,8 @@ Reproduce after acquisition with
 The script requires a disposable database and owns the fixed
 `archive_store_verification` schema; an existing schema is refused and never
 removed. A newly created schema is dropped on completion or failure. There is no
-HTTP feed refresh, SQL queue interface or automatic feed synchronization in
-these functions.
+HTTP feed refresh or automatic feed synchronization in these functions. The
+separate queue read interface is described below.
 
 ## Read a filtered queue
 
