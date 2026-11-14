@@ -80,3 +80,30 @@ export async function recordDecision(pool: Pool, input: unknown) {
     client.release(broken);
   }
 }
+
+const readSchema = z.strictObject({
+  asset: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/),
+  cve: z.string().regex(/^CVE-[0-9]{4}-[0-9]{4,19}$/),
+  asOf: z.iso.date(),
+});
+
+/** Reads current saved state, not a reconstruction of historical decisions. */
+export async function readDecision(pool: Pool, input: unknown) {
+  const request = readSchema.parse(input);
+  const result = await pool.query<{ decision: z.infer<typeof decisionSchema> }>(
+    'SELECT decision FROM eq_decisions WHERE asset=$1 AND cve=$2',
+    [request.asset, request.cve],
+  );
+  const saved = result.rows[0]?.decision;
+  if (!saved) return null;
+  const decision = decisionSchema.parse(saved);
+  if (request.asOf < decision.reviewedOn)
+    throw new RangeError('Read date precedes current decision');
+  const expired =
+    decision.status === 'exception' && decision.exceptionUntil! <= request.asOf;
+  return {
+    decision,
+    exceptionExpired: expired,
+    effectiveStatus: expired ? 'open' : decision.status,
+  };
+}

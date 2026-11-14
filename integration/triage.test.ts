@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { initialize, StaleReview } from '../src/store.js';
-import { initializeTriage, recordDecision } from '../src/triage.js';
+import {
+  initializeTriage,
+  recordDecision,
+  readDecision,
+} from '../src/triage.js';
 if (!process.env.TEST_DATABASE_URL)
   throw new Error('TEST_DATABASE_URL required');
 test('decision and history commit together; stale reviews and history failures preserve prior state', async () => {
@@ -71,6 +75,41 @@ test('decision and history commit together; stale reviews and history failures p
       1,
     );
     await client.query('DROP TRIGGER reject_event ON eq_decision_events');
+    const exception = {
+      ...decision,
+      expectedRevision: 1,
+      status: 'exception',
+      exceptionUntil: '2026-11-16',
+    };
+    await recordDecision(scoped, exception);
+    for (const [asOf, expired] of [
+      ['2026-11-15', false],
+      ['2026-11-16', true],
+      ['2026-11-17', true],
+    ] as const) {
+      const read = await readDecision(scoped, {
+        asset: 'host',
+        cve: decision.cve,
+        asOf,
+      });
+      assert.equal(read?.exceptionExpired, expired);
+      assert.equal(read?.effectiveStatus, expired ? 'open' : 'exception');
+      assert.deepEqual(read?.decision, exception);
+    }
+    await assert.rejects(
+      readDecision(scoped, {
+        asset: 'host',
+        cve: decision.cve,
+        asOf: '2026-11-13',
+      }),
+      RangeError,
+    );
+    assert.equal(
+      (await client.query('SELECT count(*)::int AS n FROM eq_decision_events'))
+        .rows[0].n,
+      2,
+    );
+
     await assert.rejects(
       recordDecision(scoped, {
         ...decision,
@@ -82,7 +121,7 @@ test('decision and history commit together; stale reviews and history failures p
     assert.equal(
       (await client.query('SELECT revision FROM eq_workspace')).rows[0]
         .revision,
-      1,
+      2,
     );
   } finally {
     if (created) await client.query('DROP SCHEMA triage_fixture CASCADE');
