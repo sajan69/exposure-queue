@@ -6,6 +6,7 @@ import {
   initializeTriage,
   recordDecision,
   readDecision,
+  readDecisionHistory,
 } from '../src/triage.js';
 if (!process.env.TEST_DATABASE_URL)
   throw new Error('TEST_DATABASE_URL required');
@@ -110,6 +111,33 @@ test('decision and history commit together; stale reviews and history failures p
       2,
     );
 
+    const history = await readDecisionHistory(scoped, {
+      asset: 'host',
+      cve: decision.cve,
+      throughRevision: 2,
+      limit: 1,
+    });
+    assert.equal(history.rows[0]!.revision, 1);
+    assert.equal(history.nextAfterRevision, 1);
+    const last = await readDecisionHistory(scoped, {
+      asset: 'host',
+      cve: decision.cve,
+      throughRevision: 2,
+      afterRevision: 1,
+      limit: 1,
+    });
+    assert.equal(last.rows[0]!.revision, 2);
+    assert.equal(last.nextAfterRevision, null);
+    assert.equal(
+      (
+        await readDecisionHistory(scoped, {
+          asset: 'host',
+          cve: decision.cve,
+          throughRevision: 1,
+        })
+      ).rows.length,
+      1,
+    );
     await assert.rejects(
       recordDecision(scoped, {
         ...decision,
@@ -202,4 +230,3 @@ test('separate connections compete for one decision revision', async () => {
     await admin.end();
   }
 });
-

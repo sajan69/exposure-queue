@@ -107,3 +107,40 @@ export async function readDecision(pool: Pool, input: unknown) {
     effectiveStatus: expired ? 'open' : decision.status,
   };
 }
+
+const historySchema = z.strictObject({
+  asset: readSchema.shape.asset,
+  cve: readSchema.shape.cve,
+  throughRevision: z.number().int().nonnegative(),
+  afterRevision: z.number().int().nonnegative().default(0),
+  limit: z.number().int().min(1).max(100).default(50),
+});
+
+/** Fixed upper revision excludes reviews appended after pagination starts. */
+export async function readDecisionHistory(pool: Pool, input: unknown) {
+  const request = historySchema.parse(input);
+  if (request.afterRevision > request.throughRevision)
+    throw new RangeError('History cursor exceeds upper revision');
+  const result = await pool.query<{
+    revision: number;
+    decision: unknown;
+    recorded_at: Date;
+  }>(
+    `SELECT revision,decision,recorded_at FROM eq_decision_events
+     WHERE asset=$1 AND cve=$2 AND revision>$3 AND revision<=$4
+     ORDER BY revision LIMIT $5`,
+    [
+      request.asset,
+      request.cve,
+      request.afterRevision,
+      request.throughRevision,
+      request.limit + 1,
+    ],
+  );
+  const rows = result.rows.slice(0, request.limit);
+  return {
+    rows,
+    nextAfterRevision:
+      result.rows.length > request.limit ? rows.at(-1)!.revision : null,
+  };
+}
