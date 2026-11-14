@@ -113,7 +113,7 @@ test('decision and history commit together; stale reviews and history failures p
     await assert.rejects(
       recordDecision(scoped, {
         ...decision,
-        expectedRevision: 1,
+        expectedRevision: 2,
         asset: 'missing',
       }),
       { code: '23503' },
@@ -202,3 +202,4 @@ test('separate connections compete for one decision revision', async () => {
     await admin.end();
   }
 });
+
