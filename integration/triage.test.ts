@@ -90,3 +90,76 @@ test('decision and history commit together; stale reviews and history failures p
     await pool.end();
   }
 });
+
+test('separate connections compete for one decision revision', async () => {
+  const admin = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
+  await admin.query('CREATE SCHEMA triage_race');
+  const pool = new Pool({
+    connectionString: process.env.TEST_DATABASE_URL,
+    max: 2,
+    options: '-c search_path=triage_race',
+  });
+  try {
+    await initialize(pool);
+    await initializeTriage(pool);
+    await pool.query(
+      "INSERT INTO eq_imports(sha256,reviewed_on,inserted) VALUES($1,'2026-11-14',1)",
+      ['a'.repeat(64)],
+    );
+    await pool.query(
+      "INSERT INTO eq_findings VALUES('host','CVE-2024-1234','2026-11-14','high','internal',1)",
+    );
+    const clients = await Promise.all([pool.connect(), pool.connect()]);
+    try {
+      const pids = await Promise.all(
+        clients.map((c) => c.query('SELECT pg_backend_pid() AS pid')),
+      );
+      assert.notEqual(pids[0]!.rows[0].pid, pids[1]!.rows[0].pid);
+      const decision = {
+        asset: 'host',
+        cve: 'CVE-2024-1234',
+        expectedRevision: 0,
+        owner: 'analyst',
+        status: 'open',
+        evidence: 'Synthetic race',
+        reviewedOn: '2026-11-14',
+        exceptionUntil: null,
+      };
+      const outcomes = await Promise.allSettled(
+        clients.map((c) =>
+          recordDecision(
+            {
+              connect: async () => ({ query: c.query.bind(c), release() {} }),
+            } as unknown as Pool,
+            decision,
+          ),
+        ),
+      );
+      assert.equal(outcomes.filter((r) => r.status === 'fulfilled').length, 1);
+      const refusal = outcomes.find((r) => r.status === 'rejected');
+      assert.ok(
+        refusal?.status === 'rejected' && refusal.reason instanceof StaleReview,
+      );
+    } finally {
+      clients.forEach((c) => c.release());
+    }
+    assert.equal(
+      (await pool.query('SELECT revision FROM eq_workspace')).rows[0].revision,
+      1,
+    );
+    assert.equal(
+      (await pool.query('SELECT count(*)::int AS n FROM eq_decisions')).rows[0]
+        .n,
+      1,
+    );
+    assert.equal(
+      (await pool.query('SELECT count(*)::int AS n FROM eq_decision_events'))
+        .rows[0].n,
+      1,
+    );
+  } finally {
+    await pool.end();
+    await admin.query('DROP SCHEMA triage_race CASCADE');
+    await admin.end();
+  }
+});
