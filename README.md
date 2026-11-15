@@ -283,8 +283,9 @@ separate queue read interface is described below.
 
 ## Read a filtered queue
 
-After initializing findings and feed tables, `readQueue(pool, request)` from
-`src/queue.ts` returns `{ revision, rows, next }`. For example:
+After initializing findings, feed and triage tables with `initialize(pool)`,
+`initializeFeeds(pool)` and `initializeTriage(pool)`, `readQueue(pool, request)`
+from `src/queue.ts` returns `{ revision, rows, next }`. For example:
 
 ```js
 const request = { asOf: '2026-11-09', limit: 25, kevState: 'listed' };

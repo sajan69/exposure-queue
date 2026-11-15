@@ -187,6 +187,20 @@ test('queue exact joins preserve zero, missing evidence, pagination and revision
     assert.equal(expired.rows[0]!.effective_status, 'open');
     assert.equal(expired.rows[0]!.exception_expired, true);
     assert.equal(expired.rows[0]!.analyst_decision.status, 'exception');
+    await recordDecision(scoped, {
+      asset: 'alpha',
+      cve: 'CVE-2024-1234',
+      expectedRevision: expired.revision,
+      owner: 'analyst',
+      evidence: 'Later synthetic review',
+      status: 'resolved',
+      reviewedOn: '2026-11-11',
+      exceptionUntil: null,
+    });
+    await assert.rejects(
+      readQueue(scoped, { asOf: '2026-11-10' }),
+      /Review date precedes current decisions/,
+    );
   } finally {
     await client.query('DROP SCHEMA queue_fixture CASCADE');
     client.release();
