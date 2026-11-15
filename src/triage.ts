@@ -26,20 +26,51 @@ const decisionSchema = z
       });
   });
 
+// Shared table checks also reject malformed direct-SQL writes. Application
+// validation remains responsible for presenting useful input errors.
+const decisionCheck = `CHECK (COALESCE(
+  jsonb_typeof(decision)='object'
+  AND decision ?& ARRAY['asset','cve','expectedRevision','owner','status','evidence','reviewedOn','exceptionUntil']
+  AND (decision - ARRAY['asset','cve','expectedRevision','owner','status','evidence','reviewedOn','exceptionUntil'])='{}'::jsonb
+  AND jsonb_typeof(decision->'asset')='string' AND decision->>'asset'=asset
+  AND jsonb_typeof(decision->'cve')='string' AND decision->>'cve'=cve
+  AND jsonb_typeof(decision->'expectedRevision')='number'
+  AND decision->>'expectedRevision' ~ '^[0-9]+$'
+  AND (decision->>'expectedRevision')::numeric BETWEEN 0 AND 2147483646
+  AND jsonb_typeof(decision->'owner')='string'
+  AND length(btrim(decision->>'owner')) BETWEEN 1 AND 128
+  AND jsonb_typeof(decision->'evidence')='string'
+  AND length(btrim(decision->>'evidence')) BETWEEN 1 AND 4096
+  AND jsonb_typeof(decision->'status')='string'
+  AND decision->>'status' IN ('open','investigating','resolved','exception')
+  AND jsonb_typeof(decision->'reviewedOn')='string'
+  AND decision->>'reviewedOn' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+  AND pg_input_is_valid(decision->>'reviewedOn','date')
+  AND CASE WHEN decision->>'status'='exception' THEN
+    jsonb_typeof(decision->'exceptionUntil')='string'
+    AND decision->>'exceptionUntil' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+    AND pg_input_is_valid(decision->>'exceptionUntil','date')
+    AND decision->>'exceptionUntil' > decision->>'reviewedOn'
+  ELSE decision->'exceptionUntil'='null'::jsonb END,
+  false))`;
+
 export async function initializeTriage(pool: Pool) {
   await pool.query(`CREATE TABLE IF NOT EXISTS eq_decisions (
     asset text COLLATE "C" NOT NULL,cve text COLLATE "C" NOT NULL,
-    decision jsonb NOT NULL CHECK(jsonb_typeof(decision)='object'),
+    decision jsonb NOT NULL ${decisionCheck},
     PRIMARY KEY(asset,cve),FOREIGN KEY(asset,cve) REFERENCES eq_findings(asset,cve)
   );
   CREATE TABLE IF NOT EXISTS eq_decision_events (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     asset text COLLATE "C" NOT NULL,cve text COLLATE "C" NOT NULL,
-    revision integer NOT NULL UNIQUE,
-    decision jsonb NOT NULL CHECK(jsonb_typeof(decision)='object'),
+    revision integer NOT NULL UNIQUE CHECK(revision>0),
+    decision jsonb NOT NULL ${decisionCheck},
+    CHECK(revision=(decision->>'expectedRevision')::numeric+1),
     recorded_at timestamptz NOT NULL DEFAULT now(),
     FOREIGN KEY(asset,cve) REFERENCES eq_findings(asset,cve)
-  );`);
+  );
+  CREATE INDEX IF NOT EXISTS eq_decision_events_finding_revision
+    ON eq_decision_events(asset,cve,revision);`);
 }
 
 /** Owner is a local label, not an authenticated identity. */

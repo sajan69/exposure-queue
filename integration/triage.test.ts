@@ -41,6 +41,36 @@ test('decision and history commit together; stale reviews and history failures p
       reviewedOn: '2026-11-14',
       exceptionUntil: null,
     };
+    for (const malformed of [
+      {},
+      { ...decision, asset: 'other' },
+      { ...decision, owner: '' },
+      { ...decision, status: 'unknown' },
+      { ...decision, reviewedOn: '2026-02-30' },
+      { ...decision, status: 'exception', exceptionUntil: null },
+      { ...decision, status: 'exception', exceptionUntil: '2026-11-14' },
+      { ...decision, exceptionUntil: '2026-11-16' },
+      { ...decision, extra: true },
+    ]) {
+      for (const table of ['eq_decisions', 'eq_decision_events']) {
+        await assert.rejects(
+          client.query(
+            table === 'eq_decisions'
+              ? 'INSERT INTO eq_decisions(asset,cve,decision) VALUES($1,$2,$3)'
+              : 'INSERT INTO eq_decision_events(asset,cve,decision,revision) VALUES($1,$2,$3,1)',
+            ['host', decision.cve, JSON.stringify(malformed)],
+          ),
+          { code: '23514' },
+        );
+      }
+    }
+    await assert.rejects(
+      client.query(
+        'INSERT INTO eq_decision_events(asset,cve,decision,revision) VALUES($1,$2,$3,2)',
+        ['host', decision.cve, JSON.stringify(decision)],
+      ),
+      { code: '23514' },
+    );
     assert.deepEqual(await recordDecision(scoped, decision), { revision: 1 });
     await assert.rejects(recordDecision(scoped, decision), StaleReview);
     assert.deepEqual(
