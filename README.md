@@ -322,3 +322,38 @@ feeds and rows, genuine zero scores, inclusive age boundaries, pagination,
 changed filters and stale revisions. These are synthetic correctness cases, not
 prioritization accuracy or workload-capacity measurements. This interface
 provides no HTTP endpoint, authentication or automatic risk ranking.
+
+## Analyst decisions
+
+After `initialize(pool)`, call `initializeTriage(pool)` to create the decision
+and event tables. Initialization creates missing tables; it does not upgrade
+existing schemas. Use a fresh disposable database for the integration fixtures.
+
+`recordDecision(pool, input)` accepts `asset`, `cve`, `expectedRevision`,
+`owner`, `status`, `evidence`, `reviewedOn` and `exceptionUntil`. Status is
+`open`, `investigating`, `resolved` or `exception`. Owner and evidence are
+required, trimmed strings bounded to 128 and 4096 characters. Dates use ISO
+calendar form. An exception requires an expiry strictly after its review date;
+every other status requires a null expiry. The finding must already exist.
+
+A write locks the shared workspace revision and atomically saves the current
+object, appends an event and advances the revision. Stale input raises
+`StaleReview`; failures roll back all three changes. A lost commit response has
+an unknown outcome: inspect current state before deciding whether to retry.
+Database checks additionally enforce required fields, finding identity, status,
+dates and expiry consistency. Synthetic PostgreSQL tests exercise malformed SQL
+writes, event-insertion rollback and competing connections.
+
+`readDecision(pool, {asset, cve, asOf})` returns the saved object and an
+effective status. At or after an exception's expiry, that effective status is
+`open`. Reading does not alter the saved decision or append an event. A date
+before the current review is refused; this is not historical-state
+reconstruction.
+
+`readDecisionHistory(pool, {asset, cve, throughRevision, afterRevision, limit})`
+returns events ordered by revision, at most 100 per page, with
+`nextAfterRevision`. Keep the same upper revision when requesting later pages to
+exclude subsequently appended reviews. The owner is a local label, not an
+authenticated identity. History is not tamper-proof or immutable against direct
+SQL access. These programmatic operations do not yet project decisions into
+`readQueue` results or provide an HTTP interface.
