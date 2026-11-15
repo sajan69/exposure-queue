@@ -355,5 +355,9 @@ returns events ordered by revision, at most 100 per page, with
 `nextAfterRevision`. Keep the same upper revision when requesting later pages to
 exclude subsequently appended reviews. The owner is a local label, not an
 authenticated identity. History is not tamper-proof or immutable against direct
-SQL access. These programmatic operations do not yet project decisions into
-`readQueue` results or provide an HTTP interface.
+SQL access. Initialize triage tables before calling `readQueue`. Queue rows
+include the saved `analyst_decision` (null when unreviewed), `effective_status`
+and `exception_expired` from the same snapshot as feed evidence. Unreviewed
+findings have effective status `open`. A queue date before any current decision
+is refused. Decision writes invalidate existing queue cursors through the shared
+revision. These operations provide no HTTP interface.

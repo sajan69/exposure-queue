@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import { initialize, StaleReview } from '../src/store.js';
 import { initializeFeeds, activateFeed } from '../src/feed-store.js';
 import { parseKev, parseEpss } from '../src/feeds.js';
+import { initializeTriage, recordDecision } from '../src/triage.js';
 import { readQueue } from '../src/queue.js';
 if (!process.env.TEST_DATABASE_URL)
   throw new Error('TEST_DATABASE_URL required');
@@ -19,6 +20,7 @@ test('queue exact joins preserve zero, missing evidence, pagination and revision
     } as unknown as Pool;
     await initialize(scoped);
     await initializeFeeds(scoped);
+    await initializeTriage(scoped);
     await client.query(
       "INSERT INTO eq_imports(sha256,reviewed_on,inserted) VALUES($1,'2026-11-09',2)",
       ['a'.repeat(64)],
@@ -161,6 +163,30 @@ test('queue exact joins preserve zero, missing evidence, pagination and revision
         readQueue(scoped, { asOf: '2026-11-09', after: cursor, ...filter }),
         StaleReview,
       );
+    const prior = await readQueue(scoped, { asOf: '2026-11-09', limit: 1 });
+    assert.equal(prior.rows[0]!.effective_status, 'open');
+    assert.equal(prior.rows[0]!.analyst_decision, null);
+    await recordDecision(scoped, {
+      asset: 'alpha',
+      cve: 'CVE-2024-1234',
+      expectedRevision: prior.revision,
+      owner: 'analyst',
+      evidence: 'Synthetic exception',
+      status: 'exception',
+      reviewedOn: '2026-11-09',
+      exceptionUntil: '2026-11-10',
+    });
+    await assert.rejects(
+      readQueue(scoped, { asOf: '2026-11-09', after: prior.next }),
+      StaleReview,
+    );
+    const active = await readQueue(scoped, { asOf: '2026-11-09' });
+    assert.equal(active.rows[0]!.effective_status, 'exception');
+    assert.equal(active.rows[0]!.exception_expired, false);
+    const expired = await readQueue(scoped, { asOf: '2026-11-10' });
+    assert.equal(expired.rows[0]!.effective_status, 'open');
+    assert.equal(expired.rows[0]!.exception_expired, true);
+    assert.equal(expired.rows[0]!.analyst_decision.status, 'exception');
   } finally {
     await client.query('DROP SCHEMA queue_fixture CASCADE');
     client.release();

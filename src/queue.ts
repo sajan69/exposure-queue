@@ -51,8 +51,19 @@ export async function readQueue(pool: Pool, request: unknown) {
     );
     if (future.rows.length)
       throw new RangeError('Review date precedes active evidence');
+    const futureDecision = await client.query(
+      "SELECT 1 FROM eq_decisions WHERE decision->>'reviewedOn'>$1 LIMIT 1",
+      [options.asOf],
+    );
+    if (futureDecision.rows.length)
+      throw new RangeError('Review date precedes current decisions');
     const result = await client.query(
       `SELECT f.asset,f.cve,f.criticality,f.exposure,f.observed_on::text,
+      d.decision AS analyst_decision,
+      CASE WHEN d.decision IS NULL THEN 'open'
+        WHEN d.decision->>'status'='exception' AND d.decision->>'exceptionUntil'<=$1 THEN 'open'
+        ELSE d.decision->>'status' END AS effective_status,
+      COALESCE(d.decision->>'status'='exception' AND d.decision->>'exceptionUntil'<=$1,false) AS exception_expired,
       w.revision,k.hash AS kev_hash,e.hash AS epss_hash,
       k.provenance AS kev_provenance,e.provenance AS epss_provenance,
       k.published_on::text AS kev_published_on,e.published_on::text AS epss_published_on,
@@ -62,6 +73,7 @@ export async function readQueue(pool: Pool, request: unknown) {
       $1::date-k.published_on AS kev_age_days,
       $1::date-e.published_on AS epss_age_days
     FROM eq_findings f CROSS JOIN eq_workspace w
+    LEFT JOIN eq_decisions d ON d.asset=f.asset AND d.cve=f.cve
     LEFT JOIN eq_feed_active ka ON ka.source='cisa-kev'
     LEFT JOIN eq_feed_snapshots k ON k.id=ka.snapshot_id
     LEFT JOIN eq_feed_rows kr ON kr.snapshot_id=k.id AND kr.cve=f.cve
