@@ -16,18 +16,18 @@ test('CSV export preserves zero, missing evidence and quoted text', () => {
     { ...row, asset: 'a,"b\nline' },
     { ...row, epss_state: 'scored', epss: '0' },
   ]);
-  const rows = parse(csv, { columns: true });
-  assert.equal(rows[0].asset, 'a,"b\nline');
-  assert.equal(rows[0].epss, '');
-  assert.equal(rows[0].epss_state, 'missing');
-  assert.equal(rows[1].epss, '0');
+  const rows = parse(csv, { columns: true }) as Record<string, string>[];
+  assert.equal(rows[0]!.asset, 'a,"b\nline');
+  assert.equal(rows[0]!.epss, '');
+  assert.equal(rows[0]!.epss_state, 'missing');
+  assert.equal(rows[1]!.epss, '0');
 });
 test('CSV export neutralizes spreadsheet formulas and refuses oversized pages', () => {
   for (const asset of ['=1+1', '+cmd', '-1', '@SUM(A1)', '\t=1', '  =1']) {
     const [saved] = parse(exportQueuePage([{ ...row, asset }]), {
       columns: true,
-    });
-    assert.equal(saved.asset, `'${asset}`);
+    }) as Record<string, string>[];
+    assert.equal(saved!.asset, `'${asset}`);
   }
   assert.throws(() => exportQueuePage(Array.from({ length: 101 }, () => row)));
 });
