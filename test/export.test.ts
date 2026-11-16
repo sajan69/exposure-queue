@@ -31,3 +31,12 @@ test('CSV export neutralizes spreadsheet formulas and refuses oversized pages', 
   }
   assert.throws(() => exportQueuePage(Array.from({ length: 101 }, () => row)));
 });
+
+test('CSV export refuses invalid or contradictory scores', () => {
+  for (const epss of ['NaN', 'Infinity', '1.1', '-0.1', '=1', '0'.repeat(65)])
+    assert.throws(() =>
+      exportQueuePage([{ ...row, epss_state: 'scored', epss }]),
+    );
+  assert.throws(() => exportQueuePage([{ ...row, epss: '0' }]));
+  assert.throws(() => exportQueuePage([{ ...row, epss_state: 'scored' }]));
+});

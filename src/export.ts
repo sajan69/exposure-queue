@@ -1,13 +1,32 @@
 import { z } from 'zod';
 
-const rowSchema = z.object({
-  asset: z.string().max(128),
-  cve: z.string().regex(/^CVE-[0-9]{4}-[0-9]{4,19}$/),
-  effective_status: z.enum(['open', 'investigating', 'resolved', 'exception']),
-  epss: z.string().nullable(),
-  kev_state: z.enum(['listed', 'not-listed', 'unavailable']),
-  epss_state: z.enum(['scored', 'missing', 'unavailable']),
-});
+const rowSchema = z
+  .object({
+    asset: z.string().max(128),
+    cve: z.string().regex(/^CVE-[0-9]{4}-[0-9]{4,19}$/),
+    effective_status: z.enum([
+      'open',
+      'investigating',
+      'resolved',
+      'exception',
+    ]),
+    epss: z
+      .string()
+      .max(64)
+      .regex(/^(?:0(?:\.[0-9]+)?|1(?:\.0+)?|[0-9]+(?:\.[0-9]+)?e-[0-9]+)$/)
+      .refine(
+        (value) =>
+          Number.isFinite(Number(value)) &&
+          Number(value) >= 0 &&
+          Number(value) <= 1,
+      )
+      .nullable(),
+    kev_state: z.enum(['listed', 'not-listed', 'unavailable']),
+    epss_state: z.enum(['scored', 'missing', 'unavailable']),
+  })
+  .refine((row) => (row.epss_state === 'scored') === (row.epss !== null), {
+    message: 'Score must agree with evidence state',
+  });
 
 function cell(value: string | null): string {
   const text = value ?? '';

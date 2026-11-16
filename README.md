@@ -362,3 +362,22 @@ and `exception_expired` from the same snapshot as feed evidence. Unreviewed
 findings have effective status `open`. A queue date before any current decision
 is refused. Decision writes invalidate existing queue cursors through the shared
 revision. These operations provide no HTTP interface.
+
+## CSV page export
+
+`exportQueuePage(rows)` from `dist/src/export.js` serializes at most 100 queue
+rows as quoted UTF-8 CSV with CRLF records. Columns are asset, CVE, effective
+status, KEV state, EPSS state and EPSS score. Missing scores remain empty and
+retain their missing/unavailable state; a genuine zero remains `0`. Scores must
+be bounded numeric text consistent with their evidence state.
+
+Cells beginning with spreadsheet formula markers, including after whitespace,
+receive a leading apostrophe. Quoting preserves commas, quotes and newlines.
+This changes those cell values deliberately; spreadsheet applications and
+subsequent editing can still interpret files differently. Treat exported data as
+untrusted when opening it in other tools.
+
+This function exports one page, not a complete workspace or an audit backup. It
+omits analyst evidence, owners, feed provenance and pagination context. Retain
+the queue revision and filters separately. It provides no download endpoint or
+automatic file writing.
