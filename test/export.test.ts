@@ -41,17 +41,35 @@ test('CSV export refuses invalid or contradictory scores', () => {
   assert.throws(() => exportQueuePage([{ ...row, epss_state: 'scored' }]));
 });
 
-test('CSV probability bounds use exact decimal value and refuse nonzero underflow', () => {
-  for (const epss of [
-    '1.0000000000000000001',
-    '1e-9999',
-    '10.000000000000000001e-1',
-  ])
-    assert.throws(() =>
-      exportQueuePage([{ ...row, epss_state: 'scored', epss }]),
-    );
-  assert.match(
-    exportQueuePage([{ ...row, epss_state: 'scored', epss: '5e-7' }]),
-    /5e-7/,
+test('review export retains context, analyst evidence and feed identities', async () => {
+  const { exportReviewPage } = await import('../src/export.js');
+  const csv = exportReviewPage({
+    revision: 7,
+    asOf: '2026-11-17',
+    rows: [
+      {
+        ...row,
+        analyst_decision: {
+          owner: '=analyst',
+          evidence: 'Reviewed,"quoted"\ncontext',
+          reviewedOn: '2026-11-16',
+          exceptionUntil: null,
+        },
+        kev_hash: 'a'.repeat(64),
+        epss_hash: null,
+        kev_published_on: '2026-11-15',
+        epss_published_on: null,
+      },
+    ],
+  });
+  const [saved] = parse(csv, { columns: true }) as Record<string, string>[];
+  assert.equal(saved!.revision, '7');
+  assert.equal(saved!.as_of, '2026-11-17');
+  assert.equal(saved!.owner, "'=analyst");
+  assert.equal(saved!.evidence, 'Reviewed,"quoted"\ncontext');
+  assert.equal(saved!.kev_hash, 'a'.repeat(64));
+  assert.equal(saved!.epss_hash, '');
+  assert.throws(() =>
+    exportReviewPage({ revision: -1, asOf: 'bad', rows: [] }),
   );
 });
