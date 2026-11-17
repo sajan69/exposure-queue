@@ -1,5 +1,19 @@
 import { z } from 'zod';
 
+function representableProbability(value: string): boolean {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0 || number > 1) return false;
+  const [mantissa, exponent = '0'] = value.split('e-');
+  const [whole, fraction = ''] = mantissa!.split('.');
+  const coefficient = BigInt(whole! + fraction);
+  if (coefficient === 0n) return true;
+  if (number === 0) return false;
+  const scale = fraction.length + Number(exponent);
+  // Nonzero representable numbers cannot require an unbounded exponent here.
+  if (scale > 400) return false;
+  return coefficient <= 10n ** BigInt(scale);
+}
+
 const rowSchema = z
   .object({
     asset: z.string().max(128),
@@ -14,12 +28,7 @@ const rowSchema = z
       .string()
       .max(64)
       .regex(/^(?:0(?:\.[0-9]+)?|1(?:\.0+)?|[0-9]+(?:\.[0-9]+)?e-[0-9]+)$/)
-      .refine(
-        (value) =>
-          Number.isFinite(Number(value)) &&
-          Number(value) >= 0 &&
-          Number(value) <= 1,
-      )
+      .refine(representableProbability)
       .nullable(),
     kev_state: z.enum(['listed', 'not-listed', 'unavailable']),
     epss_state: z.enum(['scored', 'missing', 'unavailable']),

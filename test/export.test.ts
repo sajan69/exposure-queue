@@ -41,6 +41,21 @@ test('CSV export refuses invalid or contradictory scores', () => {
   assert.throws(() => exportQueuePage([{ ...row, epss_state: 'scored' }]));
 });
 
+test('CSV probability bounds use exact decimal value and refuse nonzero underflow', () => {
+  for (const epss of [
+    '1.0000000000000000001',
+    '1e-9999',
+    '10.000000000000000001e-1',
+  ])
+    assert.throws(() =>
+      exportQueuePage([{ ...row, epss_state: 'scored', epss }]),
+    );
+  assert.match(
+    exportQueuePage([{ ...row, epss_state: 'scored', epss: '5e-7' }]),
+    /5e-7/,
+  );
+});
+
 test('review export retains context, analyst evidence and feed identities', async () => {
   const { exportReviewPage } = await import('../src/export.js');
   const csv = exportReviewPage({
