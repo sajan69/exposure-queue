@@ -5,6 +5,8 @@ import { initialize, StaleReview } from '../src/store.js';
 import { initializeFeeds, activateFeed } from '../src/feed-store.js';
 import { parseKev, parseEpss } from '../src/feeds.js';
 import { initializeTriage, recordDecision } from '../src/triage.js';
+import { exportReviewPage } from '../src/export.js';
+import { parse } from 'csv-parse/sync';
 import { readQueue } from '../src/queue.js';
 if (!process.env.TEST_DATABASE_URL)
   throw new Error('TEST_DATABASE_URL required');
@@ -187,6 +189,24 @@ test('queue exact joins preserve zero, missing evidence, pagination and revision
     assert.equal(expired.rows[0]!.effective_status, 'open');
     assert.equal(expired.rows[0]!.exception_expired, true);
     assert.equal(expired.rows[0]!.analyst_decision.status, 'exception');
+    const csv = exportReviewPage({
+      revision: expired.revision,
+      asOf: '2026-11-10',
+      rows: expired.rows,
+    });
+    const exported = parse(csv, { columns: true }) as Record<string, string>[];
+    assert.equal(exported.length, 2);
+    assert.equal(exported[0]!.revision, String(expired.revision));
+    assert.equal(exported[0]!.asset, 'alpha');
+    assert.equal(exported[0]!.effective_status, 'open');
+    assert.equal(exported[0]!.owner, 'analyst');
+    assert.equal(exported[0]!.evidence, 'Synthetic exception');
+    assert.equal(exported[0]!.exception_until, '2026-11-10');
+    assert.equal(exported[0]!.kev_hash, expired.rows[0]!.kev_hash);
+    assert.equal(exported[0]!.epss, '0');
+    assert.equal(exported[1]!.owner, '');
+    assert.equal(exported[1]!.epss_state, 'missing');
+
     await recordDecision(scoped, {
       asset: 'alpha',
       cve: 'CVE-2024-1234',
