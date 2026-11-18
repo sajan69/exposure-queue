@@ -63,6 +63,12 @@ export function exportQueuePage(input: unknown): string {
   );
 }
 
+const provenanceSchema = z.object({
+  url: z.url().max(2048),
+  retrievedAt: z.iso.datetime(),
+  archiveSha256: z.string().regex(/^[a-f0-9]{64}$/),
+});
+
 /** Review details accompany a bounded page, not an entire workspace backup. */
 export function exportReviewPage(input: unknown): string {
   const detail = z
@@ -81,6 +87,8 @@ export function exportReviewPage(input: unknown): string {
                   exceptionUntil: z.iso.date().nullable(),
                 })
                 .nullable(),
+              kev_provenance: provenanceSchema.nullable().optional(),
+              epss_provenance: provenanceSchema.nullable().optional(),
               kev_hash: z
                 .string()
                 .regex(/^[a-f0-9]{64}$/)
@@ -114,6 +122,12 @@ export function exportReviewPage(input: unknown): string {
     'epss_hash',
     'kev_published_on',
     'epss_published_on',
+    'kev_source_url',
+    'kev_retrieved_at',
+    'kev_archive_sha256',
+    'epss_source_url',
+    'epss_retrieved_at',
+    'epss_archive_sha256',
   ];
   const rows = detail.rows.map((row) => [
     String(detail.revision),
@@ -132,6 +146,12 @@ export function exportReviewPage(input: unknown): string {
     row.epss_hash,
     row.kev_published_on,
     row.epss_published_on,
+    row.kev_provenance?.url ?? null,
+    row.kev_provenance?.retrievedAt ?? null,
+    row.kev_provenance?.archiveSha256 ?? null,
+    row.epss_provenance?.url ?? null,
+    row.epss_provenance?.retrievedAt ?? null,
+    row.epss_provenance?.archiveSha256 ?? null,
   ]);
   return (
     [header, ...rows].map((row) => row.map(cell).join(',')).join('\r\n') +

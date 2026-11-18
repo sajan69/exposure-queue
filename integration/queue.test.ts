@@ -204,6 +204,14 @@ test('queue exact joins preserve zero, missing evidence, pagination and revision
     assert.equal(exported[0]!.exception_until, '2026-11-10');
     assert.equal(exported[0]!.kev_hash, expired.rows[0]!.kev_hash);
     assert.equal(exported[0]!.epss, '0');
+    assert.equal(
+      exported[0]!.epss_source_url,
+      expired.rows[0]!.epss_provenance.url,
+    );
+    assert.equal(
+      exported[0]!.epss_archive_sha256,
+      expired.rows[0]!.epss_provenance.archiveSha256,
+    );
     assert.equal(exported[1]!.owner, '');
     assert.equal(exported[1]!.epss_state, 'missing');
 
