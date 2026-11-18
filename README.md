@@ -377,10 +377,10 @@ This changes those cell values deliberately; spreadsheet applications and
 subsequent editing can still interpret files differently. Treat exported data as
 untrusted when opening it in other tools.
 
-This function exports one page, not a complete workspace or an audit backup. It
-omits analyst evidence, owners, feed provenance and pagination context. Retain
-the queue revision and filters separately. It provides no download endpoint or
-automatic file writing.
+This function exports one page, not a complete workspace or an audit backup. The
+basic `exportQueuePage` function omits analyst evidence, owners, feed provenance
+and pagination context. Retain the queue revision and filters separately. It
+provides no download endpoint or automatic file writing.
 
 `exportReviewPage({revision, asOf, filters, rows})` adds analyst owner,
 evidence, review date and exception expiry, feed hashes/publication dates, and

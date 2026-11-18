@@ -61,6 +61,7 @@ test('review export retains context, analyst evidence and feed identities', asyn
   const csv = exportReviewPage({
     revision: 7,
     asOf: '2026-11-17',
+    filters: { minEpss: 0, kevState: 'unavailable', maxAgeDays: 2 },
     rows: [
       {
         ...row,
@@ -80,6 +81,11 @@ test('review export retains context, analyst evidence and feed identities', asyn
   const [saved] = parse(csv, { columns: true }) as Record<string, string>[];
   assert.equal(saved!.revision, '7');
   assert.equal(saved!.as_of, '2026-11-17');
+  assert.deepEqual(JSON.parse(saved!.filters_json!), {
+    minEpss: 0,
+    kevState: 'unavailable',
+    maxAgeDays: 2,
+  });
   assert.equal(saved!.owner, "'=analyst");
   assert.equal(saved!.evidence, 'Reviewed,"quoted"\ncontext');
   assert.equal(saved!.kev_hash, 'a'.repeat(64));
