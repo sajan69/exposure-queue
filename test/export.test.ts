@@ -88,3 +88,23 @@ test('review export retains context, analyst evidence and feed identities', asyn
     exportReviewPage({ revision: -1, asOf: 'bad', rows: [] }),
   );
 });
+
+test('review export preserves validated filter context', async () => {
+  const { exportReviewPage } = await import('../src/export.js');
+  assert.throws(() =>
+    exportReviewPage({
+      revision: 1,
+      asOf: '2026-11-18',
+      filters: { minEpss: 2 },
+      rows: [],
+    }),
+  );
+  assert.throws(() =>
+    exportReviewPage({
+      revision: 1,
+      asOf: '2026-11-18',
+      filters: { unknown: true },
+      rows: [],
+    }),
+  );
+});

@@ -75,6 +75,14 @@ export function exportReviewPage(input: unknown): string {
     .object({
       revision: z.number().int().nonnegative(),
       asOf: z.iso.date(),
+      filters: z
+        .strictObject({
+          criticality: z.enum(['low', 'medium', 'high', 'critical']).optional(),
+          minEpss: z.number().min(0).max(1).optional(),
+          kevState: z.enum(['listed', 'not-listed', 'unavailable']).optional(),
+          maxAgeDays: z.number().int().min(0).max(36500).optional(),
+        })
+        .default({}),
       rows: z
         .array(
           rowSchema.and(
@@ -108,6 +116,7 @@ export function exportReviewPage(input: unknown): string {
   const header = [
     'revision',
     'as_of',
+    'filters_json',
     'asset',
     'cve',
     'effective_status',
@@ -132,6 +141,7 @@ export function exportReviewPage(input: unknown): string {
   const rows = detail.rows.map((row) => [
     String(detail.revision),
     detail.asOf,
+    JSON.stringify(detail.filters),
     row.asset,
     row.cve,
     row.effective_status,

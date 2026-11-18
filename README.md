@@ -381,3 +381,19 @@ This function exports one page, not a complete workspace or an audit backup. It
 omits analyst evidence, owners, feed provenance and pagination context. Retain
 the queue revision and filters separately. It provides no download endpoint or
 automatic file writing.
+
+`exportReviewPage({revision, asOf, filters, rows})` adds analyst owner,
+evidence, review date and exception expiry, feed hashes/publication dates, and
+available acquisition URL, retrieval time and archive hash. `filters` accepts
+the queue's criticality, minimum EPSS, KEV state and maximum feed-age options;
+it defaults to an empty object and is recorded as JSON in each row. Invalid
+filters are refused. Pass rows and revision from the same `readQueue` response
+and retain the exact request date and filters. The serializer validates
+structure; it does not authenticate caller-supplied context or fetch source
+URLs. Provenance is the saved acquisition record, not a publisher signature.
+
+Both exporters return one bounded page. An empty page produces headers only, so
+retain its context separately. Review CSV is not a database backup or an
+immutable history export. The PostgreSQL fixture round-trips actual queue
+results through CSV, checking analyst evidence, expired exceptions, feed
+identity, acquisition provenance, zero scores and missing data.
