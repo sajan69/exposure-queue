@@ -62,6 +62,41 @@ test('HTTP import review, atomic confirmation and stale refusal use PostgreSQL s
     };
     assert.equal(page.revision, 1);
     assert.equal(page.rows[0]?.asset, 'alpha');
+    const decision = {
+      asset: 'alpha',
+      cve: 'CVE-2024-1234',
+      expectedRevision: 1,
+      owner: 'Analyst',
+      status: 'investigating',
+      evidence: 'Synthetic review evidence',
+      reviewedOn: input.asOf,
+      exceptionUntil: null,
+    };
+    assert.equal((await post('/api/decision/save', decision)).status, 200);
+    assert.equal((await post('/api/decision/save', decision)).status, 409);
+    const read = await post('/api/decision/read', {
+      asset: decision.asset,
+      cve: decision.cve,
+      asOf: input.asOf,
+    });
+    assert.equal(read.status, 200);
+    const saved = (await read.json()) as {
+      effectiveStatus: string;
+      decision: { evidence: string };
+    };
+    assert.equal(saved.effectiveStatus, 'investigating');
+    assert.equal(saved.decision.evidence, decision.evidence);
+    const history = await post('/api/decision/history', {
+      asset: decision.asset,
+      cve: decision.cve,
+      throughRevision: 2,
+    });
+    assert.equal(history.status, 200);
+    const events = (await history.json()) as { rows: { revision: number }[] };
+    assert.deepEqual(
+      events.rows.map((row) => row.revision),
+      [2],
+    );
     assert.equal((await post('/api/unknown', {})).status, 404);
     assert.equal((await post('/api/import/review', { rows: [] })).status, 400);
     assert.equal(
