@@ -1,4 +1,5 @@
 import { createServer, type Server } from 'node:http';
+import { httpFailure } from './http-errors.js';
 import { acceptsLocalRequest } from './http-boundary.js';
 
 /** A local transport shell; domain routes are supplied by the caller. */
@@ -50,8 +51,9 @@ export function createLocalServer(
         return send(400, { error: 'Invalid JSON' });
       }
       send(200, await handle(request.url ?? '', body));
-    } catch {
-      if (!response.headersSent) send(500, { error: 'Request failed' });
+    } catch (error) {
+      const failure = httpFailure(error);
+      if (!response.headersSent) send(failure.status, { error: failure.error });
     }
   });
   server.requestTimeout = 15000;

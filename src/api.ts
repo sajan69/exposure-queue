@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { RouteNotFound } from './http-errors.js';
 import { z } from 'zod';
 import { reviewImport, confirmImport } from './store.js';
 import { readQueue } from './queue.js';
@@ -41,7 +42,7 @@ export function createApi(pool: Pool) {
       case '/api/decision/save':
         return recordDecision(pool, body);
       default:
-        throw new Error('Unknown API route');
+        throw new RouteNotFound('Unknown API route');
     }
   };
 }
