@@ -2,7 +2,7 @@ import type { Pool } from 'pg';
 import { z } from 'zod';
 import { StaleReview } from './store.js';
 
-const requestSchema = z.strictObject({
+export const queueRequestSchema = z.strictObject({
   asOf: z.iso.date(),
   limit: z.number().int().min(1).max(100).default(50),
   after: z
@@ -25,7 +25,7 @@ const requestSchema = z.strictObject({
 
 /** Each page reads revision, findings and evidence from one MVCC snapshot. */
 export async function readQueue(pool: Pool, request: unknown) {
-  const options = requestSchema.parse(request);
+  const options = queueRequestSchema.parse(request);
   if (
     options.after &&
     (options.after.asOf !== options.asOf ||

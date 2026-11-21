@@ -2,7 +2,7 @@ import type { Pool } from 'pg';
 import { RouteNotFound } from './http-errors.js';
 import { z } from 'zod';
 import { reviewImport, confirmImport } from './store.js';
-import { readQueue } from './queue.js';
+import { queueRequestSchema, readQueue } from './queue.js';
 import { exportReviewPage } from './export.js';
 import { readDecision, readDecisionHistory, recordDecision } from './triage.js';
 
@@ -35,20 +35,8 @@ export function createApi(pool: Pool) {
         );
       }
       case '/api/export': {
-        const input = z
-          .strictObject({
-            asOf: z.iso.date(),
-            criticality: z
-              .enum(['low', 'medium', 'high', 'critical'])
-              .optional(),
-            minEpss: z.number().min(0).max(1).optional(),
-            kevState: z
-              .enum(['listed', 'not-listed', 'unavailable'])
-              .optional(),
-            maxAgeDays: z.number().int().min(0).max(36500).optional(),
-          })
-          .parse(body);
-        const { asOf, ...filters } = input;
+        const input = queueRequestSchema.parse(body);
+        const { asOf, ...context } = input;
         const page = await readQueue(pool, input);
         return {
           revision: page.revision,
@@ -56,7 +44,12 @@ export function createApi(pool: Pool) {
           csv: exportReviewPage({
             revision: page.revision,
             asOf,
-            filters,
+            filters: {
+              criticality: context.criticality,
+              minEpss: context.minEpss,
+              kevState: context.kevState,
+              maxAgeDays: context.maxAgeDays,
+            },
             rows: page.rows,
           }),
         };
