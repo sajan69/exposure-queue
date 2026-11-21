@@ -113,12 +113,67 @@ test('HTTP import review, atomic confirmation and stale refusal use PostgreSQL s
       (await post('/api/export', { asOf: input.asOf, rows: [] })).status,
       400,
     );
+    const extraInput = { ...input, csv: input.csv.replace('alpha,', 'beta,') };
+    const extraReview = (await (
+      await post('/api/import/review', extraInput)
+    ).json()) as { sha256: string; revision: number };
+    assert.equal(
+      (
+        await post('/api/import/confirm', {
+          ...extraInput,
+          expectedHash: extraReview.sha256,
+          expectedRevision: extraReview.revision,
+        })
+      ).status,
+      200,
+    );
+    const firstExport = (await (
+      await post('/api/export', { asOf: input.asOf, limit: 1 })
+    ).json()) as { csv: string; next: unknown };
+    assert.ok(firstExport.next);
+    assert.equal(
+      (parse(firstExport.csv, { columns: true }) as Record<string, string>[])[0]
+        ?.asset,
+      'alpha',
+    );
+    const secondResponse = await post('/api/export', {
+      asOf: input.asOf,
+      limit: 1,
+      after: firstExport.next,
+    });
+    assert.equal(secondResponse.status, 200);
+    const secondExport = (await secondResponse.json()) as {
+      csv: string;
+      next: unknown;
+    };
+    assert.equal(
+      (
+        parse(secondExport.csv, { columns: true }) as Record<string, string>[]
+      )[0]?.asset,
+      'beta',
+    );
+    assert.equal(secondExport.next, null);
+    assert.equal(
+      (await post('/api/decision/save', { ...decision, expectedRevision: 3 }))
+        .status,
+      200,
+    );
+    assert.equal(
+      (
+        await post('/api/export', {
+          asOf: input.asOf,
+          limit: 1,
+          after: firstExport.next,
+        })
+      ).status,
+      409,
+    );
     assert.equal((await post('/api/unknown', {})).status, 404);
     assert.equal((await post('/api/import/review', { rows: [] })).status, 400);
     assert.equal(
       (await client.query('SELECT count(*)::int AS n FROM eq_findings')).rows[0]
         .n,
-      1,
+      2,
     );
   } finally {
     server.closeAllConnections();
