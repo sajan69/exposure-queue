@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
+import { parse } from 'csv-parse/sync';
 import { initialize } from '../src/store.js';
 import { initializeFeeds } from '../src/feed-store.js';
 import { initializeTriage } from '../src/triage.js';
@@ -96,6 +97,21 @@ test('HTTP import review, atomic confirmation and stale refusal use PostgreSQL s
     assert.deepEqual(
       events.rows.map((row) => row.revision),
       [2],
+    );
+    const exported = await post('/api/export', { asOf: input.asOf });
+    assert.equal(exported.status, 200);
+    const output = (await exported.json()) as { revision: number; csv: string };
+    assert.equal(output.revision, 2);
+    const records = parse(output.csv, { columns: true }) as Record<
+      string,
+      string
+    >[];
+    assert.equal(records[0]?.owner, 'Analyst');
+    assert.equal(records[0]?.evidence, decision.evidence);
+    assert.equal(records[0]?.revision, '2');
+    assert.equal(
+      (await post('/api/export', { asOf: input.asOf, rows: [] })).status,
+      400,
     );
     assert.equal((await post('/api/unknown', {})).status, 404);
     assert.equal((await post('/api/import/review', { rows: [] })).status, 400);

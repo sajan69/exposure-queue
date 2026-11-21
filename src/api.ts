@@ -3,6 +3,7 @@ import { RouteNotFound } from './http-errors.js';
 import { z } from 'zod';
 import { reviewImport, confirmImport } from './store.js';
 import { readQueue } from './queue.js';
+import { exportReviewPage } from './export.js';
 import { readDecision, readDecisionHistory, recordDecision } from './triage.js';
 
 const importRequest = z.strictObject({
@@ -32,6 +33,33 @@ export function createApi(pool: Pool) {
           input.expectedHash,
           input.expectedRevision,
         );
+      }
+      case '/api/export': {
+        const input = z
+          .strictObject({
+            asOf: z.iso.date(),
+            criticality: z
+              .enum(['low', 'medium', 'high', 'critical'])
+              .optional(),
+            minEpss: z.number().min(0).max(1).optional(),
+            kevState: z
+              .enum(['listed', 'not-listed', 'unavailable'])
+              .optional(),
+            maxAgeDays: z.number().int().min(0).max(36500).optional(),
+          })
+          .parse(body);
+        const { asOf, ...filters } = input;
+        const page = await readQueue(pool, input);
+        return {
+          revision: page.revision,
+          next: page.next,
+          csv: exportReviewPage({
+            revision: page.revision,
+            asOf,
+            filters,
+            rows: page.rows,
+          }),
+        };
       }
       case '/api/queue':
         return readQueue(pool, body);
