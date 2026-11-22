@@ -9,10 +9,12 @@ are not migrations. Set `DATABASE_URL` in the process environment, then run:
 node dist/src/serve.js
 ```
 
-The entry point binds `127.0.0.1:4100`. It requires a reachable workspace table;
-that startup check does not verify every table or repair incomplete schemas.
-SIGINT and SIGTERM stop accepting requests and allow five seconds before open
-HTTP connections are closed. Database connection errors print generic messages.
+The entry point binds `127.0.0.1:4100`. Before binding it checks all eight
+required relations and a nonnegative safe-integer workspace revision. This is a
+presence check, not a schema migration or a complete column/constraint audit; it
+does not repair incomplete schemas. SIGINT and SIGTERM stop accepting requests
+and allow five seconds before open HTTP connections are closed. Database
+connection errors print generic messages.
 
 Every route accepts POST with exactly `Content-Type: application/json`. Requests
 are bounded to 2 MiB, decoded as strict UTF-8 and parsed as JSON. Use the
@@ -50,11 +52,13 @@ unsupported content types 415 and oversized bodies 413. Host/origin refusals
 return 403. Unexpected failures return a generic 500 without input or database
 error details. Some domain range failures currently use that generic response.
 
-Export reads rows on the server and applies the CSV formula guard. It currently
-returns only the first page of at most 50 rows; its next cursor cannot yet be
-submitted to the export route. It is a JSON response containing CSV, not an
-attachment download or workspace backup. Queue pagination remains available
-through `/api/queue`. Empty exports contain only CSV headers.
+Export reads rows on the server and applies the CSV formula guard. Pages default
+to 50 rows and accept `limit` from 1 to 100. Submit the returned `next` value as
+`after` with the same date and filters to retrieve the next page. A workspace
+change invalidates the cursor with 409; restart the export. It is a JSON
+response containing CSV, not an attachment download or workspace backup. The
+export and queue routes use the same pagination contract. Empty exports contain
+only CSV headers.
 
 The PostgreSQL integration fixture sends real HTTP requests through import,
 queue, decision, history and CSV export operations using synthetic findings. It

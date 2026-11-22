@@ -83,8 +83,8 @@ decisions are not implemented in this component.
 `confirmImport(pool, bytes, reviewDate, reviewedHash, reviewedRevision)` for a
 single trusted workspace. Supply a node-postgres `Pool` connected to a dedicated
 PostgreSQL 18 database. Call `initialize` before use; it creates the component's
-three tables. This is a programming interface, with no HTTP server or database
-CLI.
+three tables. The [local HTTP API](docs/API.md) wraps these operations; the
+original CSV preview CLI remains available.
 
 Review returns the CSV preview plus the current workspace revision. Confirmation
 reparses the original bounded bytes and compares the reviewed hash. A
@@ -321,8 +321,9 @@ invalidate this coordination contract. No transaction stays open between pages.
 The PostgreSQL fixture checks exact matches and prefix near misses, missing
 feeds and rows, genuine zero scores, inclusive age boundaries, pagination,
 changed filters and stale revisions. These are synthetic correctness cases, not
-prioritization accuracy or workload-capacity measurements. This interface
-provides no HTTP endpoint, authentication or automatic risk ranking.
+prioritization accuracy or workload-capacity measurements. This interface is
+also available through the local HTTP API. It provides no authentication or
+automatic risk ranking.
 
 ## Analyst decisions
 
@@ -361,7 +362,7 @@ include the saved `analyst_decision` (null when unreviewed), `effective_status`
 and `exception_expired` from the same snapshot as feed evidence. Unreviewed
 findings have effective status `open`. A queue date before any current decision
 is refused. Decision writes invalidate existing queue cursors through the shared
-revision. These operations provide no HTTP interface.
+revision. These operations are also available through the local HTTP API.
 
 ## CSV page export
 

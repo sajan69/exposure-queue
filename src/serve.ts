@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { createApi } from './api.js';
 import { createLocalServer } from './http-server.js';
 import { listenLocal } from './listen-local.js';
+import { checkReadiness } from './readiness.js';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -19,7 +20,7 @@ if (!connectionString) {
   const server = createLocalServer(createApi(pool));
   try {
     // Refuse an uninitialized database without creating or upgrading schemas.
-    await pool.query('SELECT revision FROM eq_workspace WHERE id=1');
+    await checkReadiness(pool);
     const port = await listenLocal(server);
     console.log(`ExposureQueue API listening on http://127.0.0.1:${port}`);
     let closing = false;

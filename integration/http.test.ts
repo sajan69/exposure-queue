@@ -8,6 +8,7 @@ import { initializeTriage } from '../src/triage.js';
 import { createApi } from '../src/api.js';
 import { createLocalServer } from '../src/http-server.js';
 import { listenLocal } from '../src/listen-local.js';
+import { checkReadiness } from '../src/readiness.js';
 
 if (!process.env.TEST_DATABASE_URL)
   throw new Error('TEST_DATABASE_URL required');
@@ -25,8 +26,14 @@ test('HTTP import review, atomic confirmation and stale refusal use PostgreSQL s
     owned = true;
     await client.query('SET search_path TO http_fixture');
     await initialize(scoped);
+    await assert.rejects(checkReadiness(scoped));
     await initializeFeeds(scoped);
     await initializeTriage(scoped);
+    await checkReadiness(scoped);
+    await client.query('DELETE FROM eq_workspace WHERE id=1');
+    await assert.rejects(checkReadiness(scoped));
+    await client.query('INSERT INTO eq_workspace (id, revision) VALUES (1, 0)');
+    await checkReadiness(scoped);
     const port = await listenLocal(server, 0);
     const post = (path: string, body: unknown) =>
       fetch(`http://127.0.0.1:${port}${path}`, {
