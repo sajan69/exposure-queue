@@ -1,13 +1,24 @@
-import { access, readFile } from 'node:fs/promises';
+import { access, readFile, readdir } from 'node:fs/promises';
+import { resolve, dirname } from 'node:path';
 import { LinkChecker } from 'linkinator';
-const markdown = await readFile('README.md', 'utf8');
-for (const match of markdown.matchAll(/\[[^\]]*\]\((?!https:)([^\s)]+)\)/g)) {
-  await access(new URL('../' + match[1], import.meta.url));
-  console.log('OK local ' + match[1]);
+const documents = [
+  'README.md',
+  ...(await readdir('docs'))
+    .filter((name) => name.endsWith('.md'))
+    .map((name) => `docs/${name}`),
+];
+const links = [];
+for (const document of documents) {
+  const markdown = await readFile(document, 'utf8');
+  for (const match of markdown.matchAll(/\[[^\]]*\]\(([^\s)]+)\)/g)) {
+    const target = match[1];
+    if (target.startsWith('https:')) links.push(target);
+    else if (!target.startsWith('#')) {
+      await access(resolve(dirname(document), target.split('#')[0]));
+      console.log(`OK local ${document}: ${target}`);
+    }
+  }
 }
-const links = [...markdown.matchAll(/\[[^\]]*\]\((https:\/\/[^\s)]+)\)/g)].map(
-  (match) => match[1],
-);
 if (!links.length) throw new Error('No documentation links found');
 for (const url of new Set(links)) {
   const result = await new LinkChecker().check({
