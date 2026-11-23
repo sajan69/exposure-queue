@@ -1,0 +1,165 @@
+import React, { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import './style.css';
+async function post(path, body) {
+  const response = await fetch('/api/' + path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Request failed');
+  return result;
+}
+function App() {
+  const [csv, setCsv] = useState('');
+  const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
+  const [preview, setPreview] = useState(null);
+  const [page, setPage] = useState(null);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function run(action) {
+    setBusy(true);
+    setMessage('');
+    try {
+      await action();
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <main>
+      <header>
+        <p>LOCAL WORKSPACE</p>
+        <h1>ExposureQueue</h1>
+        <p>
+          Review authorized findings against dated evidence. EPSS is
+          probability, not complete risk; KEV does not prove an asset is
+          affected.
+        </p>
+      </header>
+      <label>
+        Review date
+        <input
+          type="date"
+          value={asOf}
+          disabled={busy}
+          onChange={(e) => {
+            setAsOf(e.target.value);
+            setPreview(null);
+            setPage(null);
+          }}
+        />
+      </label>
+      <section>
+        <h2>Import findings</h2>
+        <label>
+          Findings CSV
+          <textarea
+            rows="8"
+            value={csv}
+            disabled={busy}
+            onChange={(e) => {
+              setCsv(e.target.value);
+              setPreview(null);
+            }}
+          />
+        </label>
+        <button
+          disabled={busy || !csv}
+          onClick={() =>
+            run(async () =>
+              setPreview(await post('import/review', { csv, asOf })),
+            )
+          }
+        >
+          Review import
+        </button>
+        {preview && (
+          <>
+            <pre>{JSON.stringify(preview, null, 2)}</pre>
+            <button
+              disabled={busy || !preview.canConfirm}
+              onClick={() =>
+                run(async () => {
+                  await post('import/confirm', {
+                    csv,
+                    asOf,
+                    expectedHash: preview.sha256,
+                    expectedRevision: preview.revision,
+                  });
+                  setPreview(null);
+                  setPage(null);
+                  setMessage('Import committed.');
+                })
+              }
+            >
+              Confirm reviewed import
+            </button>
+          </>
+        )}
+      </section>
+      <section>
+        <h2>Findings queue</h2>
+        <button
+          disabled={busy}
+          onClick={() =>
+            run(async () => setPage(await post('queue', { asOf })))
+          }
+        >
+          Refresh queue
+        </button>
+        {page && (
+          <>
+            <p>Workspace revision {page.revision}</p>
+            <div className="scroll">
+              <table>
+                <thead>
+                  <tr>
+                    {[
+                      'Asset',
+                      'CVE',
+                      'Criticality',
+                      'KEV',
+                      'EPSS',
+                      'Status',
+                    ].map((x) => (
+                      <th key={x}>{x}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {page.rows.map((row) => (
+                    <tr key={JSON.stringify([row.asset, row.cve])}>
+                      <td>{row.asset}</td>
+                      <td>{row.cve}</td>
+                      <td>{row.criticality}</td>
+                      <td>{row.kev_state}</td>
+                      <td>{row.epss ?? row.epss_state}</td>
+                      <td>{row.effective_status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {page.rows.length === 0 && <p>No findings on this page.</p>}
+            <button
+              disabled={busy || !page.next}
+              onClick={() =>
+                run(async () =>
+                  setPage(await post('queue', { asOf, after: page.next })),
+                )
+              }
+            >
+              Next page
+            </button>
+          </>
+        )}
+      </section>
+      <p role="status">{busy ? 'Working…' : message}</p>
+    </main>
+  );
+}
+createRoot(document.getElementById('root')).render(<App />);

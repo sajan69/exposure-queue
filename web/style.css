@@ -1,0 +1,62 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #142738;
+  background: #edf2f5;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 1100px;
+  margin: auto;
+  padding: 24px;
+}
+header {
+  max-width: 720px;
+}
+section {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  margin: 24px 0;
+}
+label {
+  display: grid;
+  gap: 8px;
+}
+input,
+textarea,
+button {
+  font: inherit;
+  padding: 10px;
+}
+textarea {
+  resize: vertical;
+}
+button {
+  margin: 12px 8px 0 0;
+  cursor: pointer;
+}
+pre {
+  max-height: 300px;
+  overflow: auto;
+}
+.scroll {
+  overflow: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th,
+td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #ccd5dc;
+}
+@media (max-width: 600px) {
+  main,
+  section {
+    padding: 14px;
+  }
+}
