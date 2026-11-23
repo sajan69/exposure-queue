@@ -2,9 +2,12 @@ import { createServer, type Server } from 'node:http';
 import { httpFailure } from './http-errors.js';
 import { acceptsLocalRequest } from './http-boundary.js';
 
+export type WebAsset = { contentType: string; bytes: Uint8Array };
+
 /** A local transport shell; domain routes are supplied by the caller. */
 export function createLocalServer(
   handle: (path: string, body: unknown) => Promise<unknown>,
+  assets: ReadonlyMap<string, WebAsset> = new Map(),
 ): Server {
   const server = createServer(async (request, response) => {
     response.setHeader('Cache-Control', 'no-store');
@@ -27,6 +30,21 @@ export function createLocalServer(
       )
     ) {
       return send(403, { error: 'Forbidden' });
+    }
+    if (request.method === 'GET' || request.method === 'HEAD') {
+      // Exact paths only: never resolve request paths against the filesystem.
+      const asset = assets.get(request.url ?? '');
+      if (asset) {
+        response.setHeader('Content-Type', asset.contentType);
+        response.setHeader('Content-Length', asset.bytes.byteLength);
+        response.setHeader(
+          'Content-Security-Policy',
+          "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+        );
+        response.writeHead(200);
+        response.end(request.method === 'HEAD' ? undefined : asset.bytes);
+        return;
+      }
     }
     if (request.method !== 'POST') return send(405, { error: 'POST required' });
     if (request.headers['content-type'] !== 'application/json')
