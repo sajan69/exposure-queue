@@ -50,6 +50,17 @@ test(
           reject(new Error('CLI exited before readiness'));
         });
       });
+      const home = await fetch('http://127.0.0.1:4100/');
+      assert.equal(home.status, 200);
+      const html = await home.text();
+      assert.match(html, /ExposureQueue/);
+      const scripts = [...html.matchAll(/(?:src|href)="(\/assets\/[^" ]+)"/g)];
+      assert.equal(scripts.length, 2);
+      for (const match of scripts) {
+        const asset = await fetch('http://127.0.0.1:4100' + match[1]);
+        assert.equal(asset.status, 200);
+        assert.ok((await asset.arrayBuffer()).byteLength > 0);
+      }
       const response = await fetch('http://127.0.0.1:4100/api/queue', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

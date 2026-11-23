@@ -18,22 +18,22 @@ if (!connectionString) {
   pool.on('error', () => {
     console.error('Database connection failed');
   });
-  const assets = new Map();
-  const root = new URL('../web/', import.meta.url);
-  assets.set('/', {
-    contentType: 'text/html; charset=utf-8',
-    bytes: await readFile(new URL('index.html', root)),
-  });
-  for (const name of await readdir(new URL('assets/', root))) {
-    if (!/^[a-zA-Z0-9_-]+\.(js|css)$/.test(name))
-      throw new Error('Unexpected web asset');
-    assets.set('/assets/' + name, {
-      contentType: name.endsWith('.js') ? 'text/javascript' : 'text/css',
-      bytes: await readFile(new URL('assets/' + name, root)),
-    });
-  }
-  const server = createLocalServer(createApi(pool), assets);
   try {
+    const assets = new Map();
+    const root = new URL('../web/', import.meta.url);
+    assets.set('/', {
+      contentType: 'text/html; charset=utf-8',
+      bytes: await readFile(new URL('index.html', root)),
+    });
+    for (const name of await readdir(new URL('assets/', root))) {
+      if (!/^[a-zA-Z0-9_-]+\.(js|css)$/.test(name))
+        throw new Error('Unexpected web asset');
+      assets.set('/assets/' + name, {
+        contentType: name.endsWith('.js') ? 'text/javascript' : 'text/css',
+        bytes: await readFile(new URL('assets/' + name, root)),
+      });
+    }
+    const server = createLocalServer(createApi(pool), assets);
     // Refuse an uninitialized database without creating or upgrading schemas.
     await checkReadiness(pool);
     const port = await listenLocal(server);
