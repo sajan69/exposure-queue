@@ -15,6 +15,7 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npm run build:web
       - run: npm test
       - run: npm run lint
       - run: npm run format:check
@@ -43,6 +44,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npm run build:web
       - run: npm run test:db
 
   archives:
