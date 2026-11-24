@@ -16,6 +16,25 @@ function App() {
   const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
   const [preview, setPreview] = useState(null);
   const [page, setPage] = useState(null);
+  const [filters, setFilters] = useState({
+    criticality: '',
+    kevState: '',
+    minEpss: '',
+    maxAgeDays: '',
+  });
+  const queueFilters = Object.fromEntries(
+    Object.entries(filters)
+      .filter(([, value]) => value !== '')
+      .map(([key, value]) => [
+        key,
+        key === 'minEpss' || key === 'maxAgeDays' ? Number(value) : value,
+      ]),
+  );
+  function changeFilter(key, value) {
+    setFilters({ ...filters, [key]: value });
+    setPage(null);
+  }
+
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   async function run(action) {
@@ -103,10 +122,65 @@ function App() {
       </section>
       <section>
         <h2>Findings queue</h2>
+        <fieldset disabled={busy}>
+          <legend>Evidence filters</legend>
+          <label>
+            Asset criticality
+            <select
+              value={filters.criticality}
+              onChange={(e) => changeFilter('criticality', e.target.value)}
+            >
+              <option value="">All criticalities</option>
+              {['low', 'medium', 'high', 'critical'].map((value) => (
+                <option key={value}>{value}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            KEV state
+            <select
+              value={filters.kevState}
+              onChange={(e) => changeFilter('kevState', e.target.value)}
+            >
+              <option value="">All KEV states</option>
+              {['listed', 'not-listed', 'unavailable'].map((value) => (
+                <option key={value}>{value}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Minimum EPSS
+            <input
+              type="number"
+              min="0"
+              max="1"
+              step="any"
+              value={filters.minEpss}
+              onChange={(e) => changeFilter('minEpss', e.target.value)}
+            />
+          </label>
+          <label>
+            Maximum feed age in days
+            <input
+              type="number"
+              min="0"
+              max="36500"
+              step="1"
+              value={filters.maxAgeDays}
+              onChange={(e) => changeFilter('maxAgeDays', e.target.value)}
+            />
+          </label>
+          <p>
+            Age filtering requires both feeds. Missing EPSS rows do not meet a
+            minimum score, including zero.
+          </p>
+        </fieldset>
         <button
           disabled={busy}
           onClick={() =>
-            run(async () => setPage(await post('queue', { asOf })))
+            run(async () =>
+              setPage(await post('queue', { asOf, ...queueFilters })),
+            )
           }
         >
           Refresh queue
@@ -149,7 +223,13 @@ function App() {
               disabled={busy || !page.next}
               onClick={() =>
                 run(async () =>
-                  setPage(await post('queue', { asOf, after: page.next })),
+                  setPage(
+                    await post('queue', {
+                      asOf,
+                      ...queueFilters,
+                      after: page.next,
+                    }),
+                  ),
                 )
               }
             >
