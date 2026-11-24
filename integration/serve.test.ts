@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -71,6 +72,39 @@ test(
         ((await response.json()) as { rows: unknown[] }).rows,
         [],
       );
+      const browser = await chromium.launch();
+      try {
+        const page = await browser.newPage();
+        const errors: string[] = [];
+        page.on('pageerror', (error) => errors.push(error.message));
+        await page.goto('http://127.0.0.1:4100/');
+        await page.getByLabel('Review date').fill('2026-11-09');
+        await page
+          .getByLabel('Findings CSV')
+          .fill(
+            'asset,cve,observed_on,criticality,exposure\nalpha,CVE-2024-1234,2026-11-08,high,internal\n',
+          );
+        await page
+          .getByRole('button', { name: 'Review import', exact: true })
+          .click();
+        await page
+          .getByRole('button', { name: 'Confirm reviewed import' })
+          .click();
+        await page
+          .getByRole('status')
+          .filter({ hasText: 'Import committed.' })
+          .waitFor();
+        await page.getByRole('button', { name: 'Refresh queue' }).click();
+        await page.getByRole('cell', { name: 'alpha', exact: true }).waitFor();
+        assert.deepEqual(errors, []);
+        assert.equal(
+          (await client.query('SELECT count(*)::int AS n FROM eq_findings'))
+            .rows[0].n,
+          1,
+        );
+      } finally {
+        await browser.close();
+      }
       child.kill('SIGTERM');
       const [code, signal] = await exited;
       assert.equal(code, 0);
