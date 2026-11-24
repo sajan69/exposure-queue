@@ -96,6 +96,35 @@ test(
           .waitFor();
         await page.getByRole('button', { name: 'Refresh queue' }).click();
         await page.getByRole('cell', { name: 'alpha', exact: true }).waitFor();
+        const refresh = page.getByRole('button', { name: 'Refresh queue' });
+        const alpha = page.getByRole('cell', { name: 'alpha', exact: true });
+        const empty = page.getByText('No findings on this page.', {
+          exact: true,
+        });
+        await page.getByLabel('Asset criticality').selectOption('low');
+        assert.equal(await alpha.count(), 0);
+        await refresh.click();
+        await empty.waitFor();
+        await page.getByLabel('Asset criticality').selectOption('high');
+        await refresh.click();
+        await alpha.waitFor();
+        await page.setViewportSize({ width: 375, height: 812 });
+        await page.getByLabel('KEV state').selectOption('listed');
+        await refresh.click();
+        await empty.waitFor();
+        await page.getByLabel('KEV state').selectOption('unavailable');
+        await refresh.click();
+        await alpha.waitFor();
+        await page.getByLabel('Minimum EPSS').fill('0');
+        await refresh.click();
+        await empty.waitFor();
+        await page.getByLabel('Minimum EPSS').fill('');
+        await page.getByLabel('Maximum feed age in days').fill('0');
+        await refresh.click();
+        await empty.waitFor();
+        await page.getByLabel('Maximum feed age in days').fill('');
+        await refresh.click();
+        await alpha.waitFor();
         assert.deepEqual(errors, []);
         assert.equal(
           (await client.query('SELECT count(*)::int AS n FROM eq_findings'))
