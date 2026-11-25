@@ -148,6 +148,35 @@ test(
           criticality: 'high',
           kevState: 'unavailable',
         });
+        await page
+          .getByRole('button', {
+            name: 'Review alpha CVE-2024-1234',
+            exact: true,
+          })
+          .click();
+        await page.getByLabel('Owner label').fill('Local analyst');
+        await page.getByLabel('Review status').selectOption('investigating');
+        await page
+          .getByLabel('Evidence', { exact: true })
+          .fill('Checked authorized scanner output.');
+        await page
+          .getByRole('button', { name: 'Save review', exact: true })
+          .click();
+        await page
+          .getByRole('status')
+          .filter({ hasText: 'Review saved.' })
+          .waitFor();
+        await refresh.click();
+        await page
+          .getByRole('cell', { name: 'investigating', exact: true })
+          .waitFor();
+        const saved = await client.query('SELECT decision FROM eq_decisions');
+        assert.equal(saved.rows.length, 1);
+        assert.equal(saved.rows[0].decision.owner, 'Local analyst');
+        assert.equal(
+          saved.rows[0].decision.evidence,
+          'Checked authorized scanner output.',
+        );
         assert.deepEqual(errors, []);
         assert.equal(
           (await client.query('SELECT count(*)::int AS n FROM eq_findings'))
