@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { parse } from 'csv-parse/sync';
 import test from 'node:test';
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
@@ -125,6 +127,27 @@ test(
         await page.getByLabel('Maximum feed age in days').fill('');
         await refresh.click();
         await alpha.waitFor();
+        const downloadReady = page.waitForEvent('download');
+        await page
+          .getByRole('button', { name: 'Download first 100 matches as CSV' })
+          .click();
+        const download = await downloadReady;
+        assert.equal(download.suggestedFilename(), 'exposure-queue.csv');
+        assert.equal(await download.failure(), null);
+        const downloadedPath = await download.path();
+        assert.ok(downloadedPath);
+        const records = parse(await readFile(downloadedPath, 'utf8'), {
+          columns: true,
+        }) as Record<string, string>[];
+        assert.equal(records.length, 1);
+        assert.equal(records[0]!.asset, 'alpha');
+        assert.equal(records[0]!.cve, 'CVE-2024-1234');
+        assert.equal(records[0]!.revision, '1');
+        assert.equal(records[0]!.as_of, '2026-11-09');
+        assert.deepEqual(JSON.parse(records[0]!.filters_json!), {
+          criticality: 'high',
+          kevState: 'unavailable',
+        });
         assert.deepEqual(errors, []);
         assert.equal(
           (await client.query('SELECT count(*)::int AS n FROM eq_findings'))
