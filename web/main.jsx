@@ -185,6 +185,42 @@ function App() {
         >
           Refresh queue
         </button>
+        <button
+          disabled={busy}
+          onClick={() =>
+            run(async () => {
+              const exported = await post('export', {
+                asOf,
+                ...queueFilters,
+                limit: 100,
+              });
+              const url = URL.createObjectURL(
+                new Blob([exported.csv], { type: 'text/csv;charset=utf-8' }),
+              );
+              try {
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'exposure-queue.csv';
+                document.body.append(link);
+                link.click();
+                link.remove();
+              } finally {
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              }
+              setMessage(
+                exported.next
+                  ? 'Downloaded first 100 matching findings; more findings remain.'
+                  : 'Downloaded matching findings.',
+              );
+            })
+          }
+        >
+          Download first 100 matches as CSV
+        </button>
+        <p>
+          CSV includes current review details and evidence provenance. It is not
+          a backup.
+        </p>
         {page && (
           <>
             <p>Workspace revision {page.revision}</p>
