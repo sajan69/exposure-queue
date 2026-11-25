@@ -12,6 +12,7 @@ async function post(path, body) {
   return result;
 }
 function App() {
+  const [draft, setDraft] = useState(null);
   const [csv, setCsv] = useState('');
   const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
   const [preview, setPreview] = useState(null);
@@ -235,6 +236,7 @@ function App() {
                       'KEV',
                       'EPSS',
                       'Status',
+                      'Review',
                     ].map((x) => (
                       <th key={x}>{x}</th>
                     ))}
@@ -249,6 +251,26 @@ function App() {
                       <td>{row.kev_state}</td>
                       <td>{row.epss ?? row.epss_state}</td>
                       <td>{row.effective_status}</td>
+                      <td>
+                        <button
+                          disabled={busy || !!draft}
+                          onClick={() =>
+                            setDraft({
+                              asset: row.asset,
+                              cve: row.cve,
+                              expectedRevision: page.revision,
+                              owner: row.analyst_decision?.owner ?? '',
+                              evidence: row.analyst_decision?.evidence ?? '',
+                              status: row.analyst_decision?.status ?? 'open',
+                              reviewedOn: asOf,
+                              exceptionUntil:
+                                row.analyst_decision?.exceptionUntil ?? '',
+                            })
+                          }
+                        >
+                          Review {row.asset} {row.cve}
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -274,6 +296,104 @@ function App() {
           </>
         )}
       </section>
+      {draft && (
+        <section>
+          <h2>
+            Review {draft.asset} {draft.cve}
+          </h2>
+          <p>
+            Based on workspace revision {draft.expectedRevision}. Failed saves
+            preserve this draft. Refresh and reopen the review after a conflict.
+          </p>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              run(async () => {
+                await post('decision/save', {
+                  ...draft,
+                  exceptionUntil:
+                    draft.status === 'exception' ? draft.exceptionUntil : null,
+                });
+                setDraft(null);
+                setPage(null);
+                setPreview(null);
+                setMessage(
+                  'Review saved. Refresh the queue to see current details.',
+                );
+              });
+            }}
+          >
+            <fieldset disabled={busy}>
+              <label>
+                Owner label
+                <input
+                  required
+                  maxLength={128}
+                  value={draft.owner}
+                  onChange={(e) =>
+                    setDraft({ ...draft, owner: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Review status
+                <select
+                  value={draft.status}
+                  onChange={(e) =>
+                    setDraft({ ...draft, status: e.target.value })
+                  }
+                >
+                  {['open', 'investigating', 'resolved', 'exception'].map(
+                    (value) => (
+                      <option key={value}>{value}</option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label>
+                Evidence
+                <textarea
+                  required
+                  maxLength={4096}
+                  value={draft.evidence}
+                  onChange={(e) =>
+                    setDraft({ ...draft, evidence: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Reviewed on
+                <input
+                  required
+                  type="date"
+                  value={draft.reviewedOn}
+                  onChange={(e) =>
+                    setDraft({ ...draft, reviewedOn: e.target.value })
+                  }
+                />
+              </label>
+              {draft.status === 'exception' && (
+                <label>
+                  Exception expiry
+                  <input
+                    required
+                    type="date"
+                    min={draft.reviewedOn}
+                    value={draft.exceptionUntil}
+                    onChange={(e) =>
+                      setDraft({ ...draft, exceptionUntil: e.target.value })
+                    }
+                  />
+                </label>
+              )}
+              <button type="submit">Save review</button>
+              <button type="button" onClick={() => setDraft(null)}>
+                Discard review draft
+              </button>
+            </fieldset>
+          </form>
+        </section>
+      )}
       <p role="status">{busy ? 'Working…' : message}</p>
     </main>
   );
