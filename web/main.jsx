@@ -253,6 +253,7 @@ function App() {
                       <td>{row.effective_status}</td>
                       <td>
                         <button
+                          type="button"
                           disabled={busy || !!draft}
                           onClick={() =>
                             setDraft({
