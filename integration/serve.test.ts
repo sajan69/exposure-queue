@@ -184,9 +184,20 @@ test(
             exact: true,
           })
           .click();
-        await page
-          .getByLabel('Evidence', { exact: true })
-          .fill('Unsaved local investigation notes.');
+        try {
+          await page
+            .getByLabel('Evidence', { exact: true })
+            .fill('Unsaved local investigation notes.');
+        } catch {
+          assert.fail(
+            JSON.stringify({
+              pageErrors: errors,
+              headings: await page.getByRole('heading').allTextContents(),
+              status: await page.getByRole('status').allTextContents(),
+              forms: await page.locator('form').count(),
+            }),
+          );
+        }
         const competing = await fetch(
           'http://127.0.0.1:4100/api/decision/save',
           {
