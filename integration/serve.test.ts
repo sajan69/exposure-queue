@@ -177,6 +177,66 @@ test(
           saved.rows[0].decision.evidence,
           'Checked authorized scanner output.',
         );
+        await page
+          .getByRole('button', {
+            name: 'Review alpha CVE-2024-1234',
+            exact: true,
+          })
+          .click();
+        await page
+          .getByLabel('Evidence', { exact: true })
+          .fill('Unsaved local investigation notes.');
+        const competing = await fetch(
+          'http://127.0.0.1:4100/api/decision/save',
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              asset: 'alpha',
+              cve: 'CVE-2024-1234',
+              expectedRevision: 2,
+              owner: 'Other local analyst',
+              status: 'resolved',
+              evidence: 'Verified remediation.',
+              reviewedOn: '2026-11-09',
+              exceptionUntil: null,
+            }),
+          },
+        );
+        assert.equal(competing.status, 200);
+        await page
+          .getByRole('button', { name: 'Save review', exact: true })
+          .click();
+        await page
+          .getByRole('status')
+          .filter({
+            hasText: 'Workspace changed or finding conflicts; review again',
+          })
+          .waitFor();
+        assert.equal(
+          await page.getByLabel('Evidence', { exact: true }).inputValue(),
+          'Unsaved local investigation notes.',
+        );
+        assert.equal(
+          await page.getByLabel('Owner label').inputValue(),
+          'Local analyst',
+        );
+        const afterConflict = await client.query(
+          'SELECT decision FROM eq_decisions',
+        );
+        assert.equal(
+          afterConflict.rows[0].decision.owner,
+          'Other local analyst',
+        );
+        assert.equal(afterConflict.rows[0].decision.status, 'resolved');
+        assert.equal(
+          (
+            await client.query(
+              'SELECT count(*)::int AS n FROM eq_decision_events',
+            )
+          ).rows[0].n,
+          2,
+        );
         assert.deepEqual(errors, []);
         assert.equal(
           (await client.query('SELECT count(*)::int AS n FROM eq_findings'))
