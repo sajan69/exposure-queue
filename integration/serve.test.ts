@@ -149,6 +149,23 @@ test(
           criticality: 'high',
           kevState: 'unavailable',
         });
+        const openHistory = page.getByRole('button', {
+          name: 'History alpha CVE-2024-1234',
+          exact: true,
+        });
+        await openHistory.click();
+        await page
+          .getByText('No saved reviews in this range.', { exact: true })
+          .waitFor();
+        assert.equal(
+          await page
+            .getByRole('button', { name: 'Next history page', exact: true })
+            .isDisabled(),
+          true,
+        );
+        await page
+          .getByRole('button', { name: 'Close history', exact: true })
+          .click();
         await page
           .getByRole('button', {
             name: 'Review alpha CVE-2024-1234',
@@ -248,6 +265,53 @@ test(
             )
           ).rows[0].n,
           2,
+        );
+        await refresh.click();
+        await page
+          .getByRole('cell', { name: 'resolved', exact: true })
+          .waitFor();
+        await openHistory.click();
+        await page
+          .getByText('Revision 2: investigating — Local analyst', {
+            exact: true,
+          })
+          .waitFor();
+        await page
+          .getByText('Revision 3: resolved — Other local analyst', {
+            exact: true,
+          })
+          .waitFor();
+        await page
+          .getByText('Checked authorized scanner output.', { exact: true })
+          .waitFor();
+        await page
+          .getByText('Verified remediation.', { exact: true })
+          .waitFor();
+        assert.equal(
+          await page
+            .getByRole('button', { name: 'Next history page', exact: true })
+            .isDisabled(),
+          true,
+        );
+        assert.equal(
+          await page.getByLabel('Evidence', { exact: true }).inputValue(),
+          'Unsaved local investigation notes.',
+        );
+        assert.equal(
+          await page.getByLabel('Owner label').inputValue(),
+          'Local analyst',
+        );
+        await page
+          .getByRole('button', { name: 'Close history', exact: true })
+          .click();
+        assert.equal(
+          await page
+            .getByRole('heading', {
+              name: 'History alpha CVE-2024-1234',
+              exact: true,
+            })
+            .count(),
+          0,
         );
         assert.deepEqual(errors, []);
         assert.equal(
