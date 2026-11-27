@@ -12,6 +12,7 @@ async function post(path, body) {
   return result;
 }
 function App() {
+  const [history, setHistory] = useState(null);
   const [draft, setDraft] = useState(null);
   const [csv, setCsv] = useState('');
   const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
@@ -236,6 +237,7 @@ function App() {
                       'KEV',
                       'EPSS',
                       'Status',
+                      'History',
                       'Review',
                     ].map((x) => (
                       <th key={x}>{x}</th>
@@ -251,6 +253,27 @@ function App() {
                       <td>{row.kev_state}</td>
                       <td>{row.epss ?? row.epss_state}</td>
                       <td>{row.effective_status}</td>
+                      <td>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            run(async () => {
+                              const context = {
+                                asset: row.asset,
+                                cve: row.cve,
+                                throughRevision: page.revision,
+                              };
+                              setHistory({
+                                ...context,
+                                ...(await post('decision/history', context)),
+                              });
+                            })
+                          }
+                        >
+                          History {row.asset} {row.cve}
+                        </button>
+                      </td>
                       <td>
                         <button
                           type="button"
@@ -297,6 +320,60 @@ function App() {
           </>
         )}
       </section>
+      {history && (
+        <section>
+          <h2>
+            History {history.asset} {history.cve}
+          </h2>
+          <p>
+            Saved reviews through workspace revision {history.throughRevision}.
+            Owner labels are not authenticated identities.
+          </p>
+          {history.rows.length === 0 && <p>No saved reviews in this range.</p>}
+          <ol>
+            {history.rows.map((event) => (
+              <li key={event.revision}>
+                <p>
+                  Revision {event.revision}: {event.decision.status} —{' '}
+                  {event.decision.owner}
+                </p>
+                <p>
+                  {event.decision.reviewedOn}; exception expiry:{' '}
+                  {event.decision.exceptionUntil ?? 'none'}
+                </p>
+                <p>{event.decision.evidence}</p>
+              </li>
+            ))}
+          </ol>
+          <button
+            type="button"
+            disabled={busy || history.nextAfterRevision === null}
+            onClick={() =>
+              run(async () => {
+                const context = {
+                  asset: history.asset,
+                  cve: history.cve,
+                  throughRevision: history.throughRevision,
+                  afterRevision: history.nextAfterRevision,
+                };
+                setHistory({
+                  ...context,
+                  ...(await post('decision/history', context)),
+                });
+              })
+            }
+          >
+            Next history page
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setHistory(null)}
+          >
+            Close history
+          </button>
+        </section>
+      )}
       {draft && (
         <section>
           <h2>
