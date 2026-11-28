@@ -313,6 +313,60 @@ test(
             .count(),
           0,
         );
+        // Build 51 real saved events so the default 50-event page has a continuation.
+        for (let revision = 3; revision < 52; revision += 1) {
+          const response = await fetch(
+            'http://127.0.0.1:4100/api/decision/save',
+            {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                asset: 'alpha',
+                cve: 'CVE-2024-1234',
+                expectedRevision: revision,
+                owner: 'Pagination analyst',
+                status: 'investigating',
+                evidence: `Synthetic review ${revision + 1}`,
+                reviewedOn: '2026-11-09',
+                exceptionUntil: null,
+              }),
+            },
+          );
+          assert.equal(response.status, 200);
+        }
+        await refresh.click();
+        await page
+          .getByText('Workspace revision 52', { exact: true })
+          .waitFor();
+        await openHistory.click();
+        const historyHeading = page.getByRole('heading', {
+          name: 'History alpha CVE-2024-1234',
+          exact: true,
+        });
+        const historySection = page
+          .locator('section')
+          .filter({ has: historyHeading });
+        await historySection
+          .getByText('Synthetic review 51', { exact: true })
+          .waitFor();
+        assert.equal(await historySection.locator('li').count(), 50);
+        await page
+          .getByRole('button', { name: 'Next history page', exact: true })
+          .click();
+        await historySection
+          .getByText('Synthetic review 52', { exact: true })
+          .waitFor();
+        assert.equal(await historySection.locator('li').count(), 1);
+        assert.equal(
+          await page
+            .getByRole('button', { name: 'Next history page', exact: true })
+            .isDisabled(),
+          true,
+        );
+        assert.equal(
+          await page.getByLabel('Evidence', { exact: true }).inputValue(),
+          'Unsaved local investigation notes.',
+        );
         assert.deepEqual(errors, []);
         assert.equal(
           (await client.query('SELECT count(*)::int AS n FROM eq_findings'))
