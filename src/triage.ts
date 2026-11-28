@@ -168,7 +168,10 @@ export async function readDecisionHistory(pool: Pool, input: unknown) {
       request.limit + 1,
     ],
   );
-  const rows = result.rows.slice(0, request.limit);
+  const rows = result.rows.slice(0, request.limit).map((event) => ({
+    ...event,
+    decision: decisionSchema.parse(event.decision),
+  }));
   return {
     rows,
     nextAfterRevision:
