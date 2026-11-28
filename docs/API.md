@@ -1,9 +1,11 @@
 # Local HTTP API
 
-Build with `npm ci --ignore-scripts` and `npm run build`. Initialize the
-database using the programmatic `initialize`, `initializeFeeds` and
-`initializeTriage` functions described in the README. These create tables; they
-are not migrations. Set `DATABASE_URL` in the process environment, then run:
+Build with `npm ci --ignore-scripts` and `npm run build` followed by
+`npm run build:web`. The web build first runs strict TypeScript checking and
+then builds the bundled React assets. Initialize the database using the
+programmatic `initialize`, `initializeFeeds` and `initializeTriage` functions
+described in the README. These create tables; they are not migrations. Set
+`DATABASE_URL` in the process environment, then run:
 
 ```sh
 node dist/src/serve.js
@@ -16,9 +18,9 @@ does not repair incomplete schemas. SIGINT and SIGTERM stop accepting requests
 and allow five seconds before open HTTP connections are closed. Database
 connection errors print generic messages.
 
-Every route accepts POST with exactly `Content-Type: application/json`. Requests
-are bounded to 2 MiB, decoded as strict UTF-8 and parsed as JSON. Use the
-numeric loopback URL: Host must match the listener's authority exactly. When
+Every API route accepts POST with exactly `Content-Type: application/json`.
+Requests are bounded to 2 MiB, decoded as strict UTF-8 and parsed as JSON. Use
+the numeric loopback URL: Host must match the listener's authority exactly. When
 Origin is present it must match that HTTP origin. Cross-site Fetch Metadata is
 refused. There is no CORS grant, authentication or protection against other
 local processes. Operate this service only in one trusted local workspace; do
@@ -33,6 +35,32 @@ not expose it through a proxy or public network.
 | `/api/decision/read`    | `asset`, `cve`, `asOf`                                          | Saved decision and effective status, or null  |
 | `/api/decision/history` | Identity, `throughRevision`, optional `afterRevision`, `limit`  | Bounded events and continuation               |
 | `/api/export`           | `asOf` and optional queue filters                               | CSV string, revision and next cursor in JSON  |
+
+## Browser workflow
+
+Open `http://127.0.0.1:4100/` after starting the service. The same process
+serves the built interface and API; no Vite development server is needed.
+Missing or oversized build assets prevent startup. Static assets accept GET and
+HEAD under the same host/origin boundary as the API.
+
+Paste an authorized findings CSV, choose a review date, review the preview and
+confirm it. Refresh the queue after importing or saving a review. Filters clear
+the displayed page and continuation cursor; use Refresh to apply them. Review
+forms retain their original workspace revision. A conflicting save preserves the
+owner and evidence draft; discard and reopen after reviewing current state.
+Drafts exist only in browser memory and are lost on reload or closing the page.
+
+History displays saved events through the queue revision used when opening it.
+Refresh the queue and reopen history to include newer events. Owner labels are
+local annotations, not authenticated identities. History supports bounded pages;
+it is not a tamper-proof audit log.
+
+The download button exports the first 100 matching current review records using
+the selected date and filters. It reports when more matches remain; use API
+pagination to export further pages. A CSV download is not a workspace backup.
+Feed activation remains a separate programmatic operation.
+
+## Request example
 
 Example queue request:
 
