@@ -15,7 +15,8 @@
     "format:check": "prettier --check .",
     "links": "node scripts/check-links.mjs",
     "test:db": "npm run build && node --test dist/integration/*.test.js",
-    "build:web": "vite build web --outDir ../dist/web --emptyOutDir"
+    "build:web": "npm run typecheck:web && vite build web --outDir ../dist/web --emptyOutDir",
+    "typecheck:web": "tsc -p tsconfig.web.json"
   },
   "dependencies": {
     "csv-parse": "7.0.3",
@@ -27,6 +28,8 @@
   "devDependencies": {
     "@types/node": "24.10.0",
     "@types/pg": "8.23.1",
+    "@types/react": "19.3.3",
+    "@types/react-dom": "19.3.0",
     "eslint": "10.14.0",
     "linkinator": "8.1.0",
     "playwright": "1.65.1",

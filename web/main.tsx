@@ -1,7 +1,37 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './style.css';
-async function post(path, body) {
+import type { reviewImport } from '../src/store.js';
+import type { readQueue } from '../src/queue.js';
+import type { readDecision, readDecisionHistory } from '../src/triage.js';
+type Preview = Awaited<ReturnType<typeof reviewImport>>;
+type QueuePage = Awaited<ReturnType<typeof readQueue>>;
+type HistoryPage = Omit<
+  Awaited<ReturnType<typeof readDecisionHistory>>,
+  'rows'
+> & {
+  rows: {
+    revision: number;
+    decision: NonNullable<Awaited<ReturnType<typeof readDecision>>>['decision'];
+  }[];
+};
+type HistoryView = HistoryPage & {
+  asset: string;
+  cve: string;
+  throughRevision: number;
+};
+type Draft = {
+  asset: string;
+  cve: string;
+  expectedRevision: number;
+  owner: string;
+  status: string;
+  evidence: string;
+  reviewedOn: string;
+  exceptionUntil: string;
+};
+
+async function post<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch('/api/' + path, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -12,12 +42,12 @@ async function post(path, body) {
   return result;
 }
 function App() {
-  const [history, setHistory] = useState(null);
-  const [draft, setDraft] = useState(null);
+  const [history, setHistory] = useState<HistoryView | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
   const [csv, setCsv] = useState('');
   const [asOf, setAsOf] = useState(new Date().toISOString().slice(0, 10));
-  const [preview, setPreview] = useState(null);
-  const [page, setPage] = useState(null);
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [page, setPage] = useState<QueuePage | null>(null);
   const [filters, setFilters] = useState({
     criticality: '',
     kevState: '',
@@ -32,20 +62,20 @@ function App() {
         key === 'minEpss' || key === 'maxAgeDays' ? Number(value) : value,
       ]),
   );
-  function changeFilter(key, value) {
+  function changeFilter(key: keyof typeof filters, value: string) {
     setFilters({ ...filters, [key]: value });
     setPage(null);
   }
 
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  async function run(action) {
+  async function run(action: () => Promise<unknown>) {
     setBusy(true);
     setMessage('');
     try {
       await action();
     } catch (error) {
-      setMessage(error.message);
+      setMessage(error instanceof Error ? error.message : 'Request failed');
     } finally {
       setBusy(false);
     }
@@ -79,7 +109,7 @@ function App() {
         <label>
           Findings CSV
           <textarea
-            rows="8"
+            rows={8}
             value={csv}
             disabled={busy}
             onChange={(e) => {
@@ -92,7 +122,7 @@ function App() {
           disabled={busy || !csv}
           onClick={() =>
             run(async () =>
-              setPreview(await post('import/review', { csv, asOf })),
+              setPreview(await post<Preview>('import/review', { csv, asOf })),
             )
           }
         >
@@ -181,7 +211,9 @@ function App() {
           disabled={busy}
           onClick={() =>
             run(async () =>
-              setPage(await post('queue', { asOf, ...queueFilters })),
+              setPage(
+                await post<QueuePage>('queue', { asOf, ...queueFilters }),
+              ),
             )
           }
         >
@@ -191,11 +223,14 @@ function App() {
           disabled={busy}
           onClick={() =>
             run(async () => {
-              const exported = await post('export', {
-                asOf,
-                ...queueFilters,
-                limit: 100,
-              });
+              const exported = await post<{ csv: string; next: unknown }>(
+                'export',
+                {
+                  asOf,
+                  ...queueFilters,
+                  limit: 100,
+                },
+              );
               const url = URL.createObjectURL(
                 new Blob([exported.csv], { type: 'text/csv;charset=utf-8' }),
               );
@@ -266,7 +301,10 @@ function App() {
                               };
                               setHistory({
                                 ...context,
-                                ...(await post('decision/history', context)),
+                                ...(await post<HistoryPage>(
+                                  'decision/history',
+                                  context,
+                                )),
                               });
                             })
                           }
@@ -306,7 +344,7 @@ function App() {
               onClick={() =>
                 run(async () =>
                   setPage(
-                    await post('queue', {
+                    await post<QueuePage>('queue', {
                       asOf,
                       ...queueFilters,
                       after: page.next,
@@ -358,7 +396,7 @@ function App() {
                 };
                 setHistory({
                   ...context,
-                  ...(await post('decision/history', context)),
+                  ...(await post<HistoryPage>('decision/history', context)),
                 });
               })
             }
@@ -477,4 +515,4 @@ function App() {
     </main>
   );
 }
-createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')!).render(<App />);
